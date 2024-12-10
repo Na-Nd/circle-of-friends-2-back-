@@ -14,11 +14,11 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import ru.nand.registryservice.utils.JwtRequestFilter;
 
 @Configuration
-public class SecurityConfig {
+public class WebSecurityConfig {
     private final JwtRequestFilter jwtRequestFilter;
 
     @Autowired
-    public SecurityConfig(JwtRequestFilter jwtRequestFilter) {
+    public WebSecurityConfig(JwtRequestFilter jwtRequestFilter) {
         this.jwtRequestFilter = jwtRequestFilter;
     }
 

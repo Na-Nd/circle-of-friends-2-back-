@@ -24,4 +24,12 @@ public class KafkaTopicConfig {
                 .build();
     }
 
+    @Bean
+    public NewTopic userAccountChangesResponseTopic(){
+        return TopicBuilder.name("user-account-changes-response-topic")
+                .partitions(3)
+                .replicas(3)
+                .build();
+    }
+
 }

@@ -8,6 +8,7 @@
         <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
         <outputRelativeToContentRoot value="true" />
         <module name="auth-service" />
+        <module name="account-user-service" />
         <module name="shared-things" />
         <module name="registry-service" />
       </profile>
@@ -22,6 +23,7 @@
   <component name="JavacSettings">
     <option name="ADDITIONAL_OPTIONS_OVERRIDE">
       <module name="account-service" options="-parameters" />
+      <module name="account-user-service" options="-parameters" />
       <module name="auth-service" options="-parameters" />
       <module name="posts-service" options="-parameters" />
       <module name="registry-service" options="-parameters" />

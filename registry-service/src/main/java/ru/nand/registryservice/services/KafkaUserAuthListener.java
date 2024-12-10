@@ -56,15 +56,18 @@ public class KafkaUserAuthListener {
         log.info("Принято ДТО пользователя: {}", loginDTO.getUsername());
 
         User user = userService.findByUsername(loginDTO.getUsername());
+        System.out.println("Подгружен пользователь:" + user);
 
         // Если такого пользователя нет
         if(user == null){
+            System.out.println("Пользователя " + loginDTO.getUsername() + " нету");
             kafkaTemplate.send("user-login-response-topic", "Ошибка валидации: такого пользователя: " + loginDTO.getUsername() + " нет");
             return;
         }
 
         // Если не заблокирован
         if(user.isAccountNonLocked()){
+            System.out.println("Пользователь " + user.getUsername() + " не заблокирован");
             // Если пароли совпали
             if(passwordEncoder.matches(loginDTO.getPassword(), user.getPassword())){
                 String token = jwtUtil.generateToken(user);
@@ -73,6 +76,7 @@ public class KafkaUserAuthListener {
                 kafkaTemplate.send("user-login-response-topic", "Ошибка валидации: пароль неверный");
             }
         } else {
+            System.out.println("Пользователь " + user.getUsername() + " заблокирован");
             kafkaTemplate.send("user-login-response-topic", "Ошибка валидации: пользователь " + loginDTO.getUsername() + " заблокирован");
         }
     }

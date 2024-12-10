@@ -18,7 +18,6 @@ import ru.nand.registryservice.services.UserService;
 import java.security.Key;
 import java.util.*;
 import java.util.function.Function;
-import java.util.stream.Collectors;
 
 @Slf4j
 @Component
@@ -67,10 +66,6 @@ public class JwtUtil {
 
     public String generateToken(UserDetails userDetails) {
         Map<String, Object> claims = new HashMap<>();
-        //claims.put("role", userDetails.getAuthorities().stream()
-        //      .map(GrantedAuthority::getAuthority)
-        //    .collect(Collectors.toList())
-        //);
         User user = userService.findByUsername(userDetails.getUsername());
 
         claims.put("role", user.getRole().name());

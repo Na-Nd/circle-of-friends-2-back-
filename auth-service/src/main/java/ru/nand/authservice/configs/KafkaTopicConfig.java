@@ -20,7 +20,6 @@ public class KafkaTopicConfig {
                 .build();
     }
 
-
     // Топик для логина
     @Bean
     public NewTopic userLoginTopic(){
