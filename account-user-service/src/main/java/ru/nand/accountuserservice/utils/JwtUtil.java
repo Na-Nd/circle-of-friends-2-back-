@@ -9,6 +9,7 @@ import org.springframework.stereotype.Component;
 import io.jsonwebtoken.security.Keys;
 
 import java.security.Key;
+import java.util.Date;
 import java.util.function.Function;
 
 @Slf4j
@@ -40,6 +41,10 @@ public class JwtUtil {
         return claimsResolver.apply(claims);
     }
 
+    public Date extractExpiration(String token) {
+        return extractClaim(token, Claims::getExpiration);
+    }
+
     private Claims extractAllClaims(String token) {
         try{
             return Jwts.parserBuilder()
@@ -64,6 +69,13 @@ public class JwtUtil {
             log.warn("Ошибка валидации токена: {}", e.getMessage());
             return false;
         }
+    }
+
+    // Токен скоро истекает
+    public boolean isTokenExpiringSoon(String token) {
+        Date expirationDate = extractExpiration(token);
+        long timeLeft = expirationDate.getTime() - System.currentTimeMillis();
+        return timeLeft <= 300 * 1000; // Проверка, осталось меньше 5 минут
     }
 
     public String resolveToken(HttpServletRequest request) {

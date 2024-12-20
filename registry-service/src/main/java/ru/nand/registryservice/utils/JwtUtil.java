@@ -114,4 +114,19 @@ public class JwtUtil {
         }
         return null;
     }
+
+    public String extractUsernameIgnoringExpiration(String token) {
+        try {
+            Claims claims = Jwts.parserBuilder()
+                    .setSigningKey(getSigningKey())
+                    .build()
+                    .parseClaimsJws(token) // Используем parseClaimsJws, который не проверяет истечение срока
+                    .getBody();
+            return claims.getSubject();
+        } catch (Exception e) {
+            log.warn("Ошибка при извлечении имени пользователя из токена: {}", e.getMessage());
+            return null; // Если ошибка, возвращаем null
+        }
+    }
+
 }
