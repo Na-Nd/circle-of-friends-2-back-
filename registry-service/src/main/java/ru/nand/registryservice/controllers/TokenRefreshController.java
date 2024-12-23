@@ -11,10 +11,8 @@ import ru.nand.registryservice.services.UserService;
 import ru.nand.registryservice.utils.JwtUtil;
 import ru.nand.sharedthings.utils.KeyGenerator;
 
-import java.util.Base64;
 
 
-// TODO попробовать делать это дело не с уже истекшим токеном, так как истекший токен не получится разобрать, а с истекающим (например осталась 1 минута до конца срока и тогда делаем запрос на обновление)
 @Slf4j
 @RestController
 public class TokenRefreshController {

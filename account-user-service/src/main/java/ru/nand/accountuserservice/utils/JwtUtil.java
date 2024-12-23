@@ -21,18 +21,22 @@ public class JwtUtil {
     @Value("${jwt.expiration}")
     private long expiration;
 
+    // Создать ключ на основе массива байт
     private Key getSigningKey(){
         return Keys.hmacShaKeyFor(secretKey.getBytes());
     }
 
+    // Извлечь имя
     public String extractUsername(String token){
         return extractClaim(token, Claims::getSubject);
     }
 
+    // Извлечь роль
     public String extractRole(String token) {
         return extractClaim(token, claims -> claims.get("role", String.class));
     }
 
+    // Извлечь конкретные данные
     public <T> T extractClaim(String token, Function<Claims, T> claimsResolver) throws RuntimeException {
         final Claims claims = extractAllClaims(token);
         if(claims == null){
@@ -41,10 +45,12 @@ public class JwtUtil {
         return claimsResolver.apply(claims);
     }
 
+    // Извлечь дату истечения
     public Date extractExpiration(String token) {
         return extractClaim(token, Claims::getExpiration);
     }
 
+    // Получить все данные из токена
     private Claims extractAllClaims(String token) {
         try{
             return Jwts.parserBuilder()
@@ -58,6 +64,7 @@ public class JwtUtil {
         }
     }
 
+    // Валидация токена
     public boolean validateToken(String token) {
         try{
             Jwts.parserBuilder()
@@ -66,7 +73,7 @@ public class JwtUtil {
                     .parseClaimsJws(token);
             return true;
         } catch (Exception e){
-            log.warn("Ошибка валидации токена: {}", e.getMessage());
+            log.error("Ошибка валидации токена: {}", e.getMessage());
             return false;
         }
     }
@@ -75,9 +82,10 @@ public class JwtUtil {
     public boolean isTokenExpiringSoon(String token) {
         Date expirationDate = extractExpiration(token);
         long timeLeft = expirationDate.getTime() - System.currentTimeMillis();
-        return timeLeft <= 300 * 1000; // Проверка, осталось меньше 5 минут
+        return timeLeft <= 240 * 1000; // Проверка, осталось меньше 5 минут
     }
 
+    // Отсечь Bearer_
     public String resolveToken(HttpServletRequest request) {
         String bearer = request.getHeader("Authorization");
         if(bearer != null && bearer.startsWith("Bearer ")){

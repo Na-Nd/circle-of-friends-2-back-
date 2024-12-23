@@ -36,7 +36,7 @@ public class JwtRequestFilter extends OncePerRequestFilter {
             String token = jwtUtil.resolveToken(request);
 
             if (token != null) {
-                // Если осталось меньше 1 минуты до истечения токена
+                // Если токен скоро истечет
                 if (jwtUtil.isTokenExpiringSoon(token)) {
                     log.info("Токен скоро истечет, запрашиваем новый токен");
                     String refreshedToken = tokenRefreshClient.refreshToken(token);
@@ -45,7 +45,7 @@ public class JwtRequestFilter extends OncePerRequestFilter {
                     if (refreshedToken != null) {
                         log.info("Токен был успешно обновлен");
                         token = refreshedToken;
-                        // Устанавливаем новый токен в заголовок ответа, если это требуется
+                        // Устанавливаем новый токен в заголовок ответа
                         response.setHeader("Authorization", "Bearer " + token);
                     } else {
                         log.warn("Не удалось обновить токен");
