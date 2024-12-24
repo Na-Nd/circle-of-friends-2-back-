@@ -2,6 +2,7 @@ package ru.nand.registryservice.controllers;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -11,13 +12,14 @@ import ru.nand.registryservice.services.UserService;
 import ru.nand.registryservice.utils.JwtUtil;
 import ru.nand.sharedthings.utils.KeyGenerator;
 
-
-
 @Slf4j
 @RestController
 public class TokenRefreshController {
     private final JwtUtil jwtUtil;
     private final UserService userService;
+
+    @Value("${mysecret}")
+    private String MY_SECRET;
 
     @Autowired
     public TokenRefreshController(JwtUtil jwtUtil, UserService userService) {
@@ -34,10 +36,7 @@ public class TokenRefreshController {
                 expiredToken = expiredToken.substring(7);
             }
             // Проверяем секретный ключ
-            String expectedKey = KeyGenerator.generateKey("myKey", expiredToken);
-            System.out.println("expectedKey: " + expectedKey);
-            System.out.println("secretKey: " + secretKey);
-            System.out.println("expiredToken: " + expiredToken);
+            String expectedKey = KeyGenerator.generateKey(MY_SECRET, expiredToken);
             if (!expectedKey.equals(secretKey)) {
                 return ResponseEntity.status(403).body("Неверный секретный ключ");
             }

@@ -18,16 +18,15 @@ public class AccountController {
         if (userDetails != null) {
             String username = userDetails.getUsername();
             String role = userDetails.getAuthorities().stream()
-                    .findFirst() // Предполагаем, что у пользователя одна роль
+                    .findFirst()
                     .map(Object::toString)
                     .orElse("NO_ROLE");
 
-            // Логирование
             log.info("Пользователь: {}, Роль: {}", username, role);
 
             return String.format("Hello, %s! Your role is %s.", username, role);
         } else {
-            log.warn("Пользователь не найден");
+            log.error("Пользователь не найден");
             return "User not found";
         }
     }
@@ -37,7 +36,6 @@ public class AccountController {
     public String adminAccess(@AuthenticationPrincipal UserDetails userDetails) {
         String username = userDetails.getUsername();
 
-        // Логирование
         log.info("Администратор: {} получил доступ", username);
 
         return String.format("Welcome, admin %s!", username);
