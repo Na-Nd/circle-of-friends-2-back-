@@ -6,6 +6,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -14,6 +15,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import ru.nand.registryservice.utils.InterserviceFilter;
 
 @Configuration
+@EnableWebSecurity
 public class WebSecurityConfig {
     private final InterserviceFilter interserviceFilter;
 
@@ -31,8 +33,8 @@ public class WebSecurityConfig {
     public SecurityFilterChain securityFilterChain(HttpSecurity httpSecurity) throws Exception {
         httpSecurity.csrf().disable()
                 .authorizeHttpRequests((requests) -> requests
-                        .requestMatchers("/api/auth/refresh-token").permitAll()
-                        .anyRequest().authenticated()
+                        //.requestMatchers("/api/auth/refresh-token").permitAll()
+                        .anyRequest().permitAll()
                 )
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .addFilterBefore(interserviceFilter, UsernamePasswordAuthenticationFilter.class);

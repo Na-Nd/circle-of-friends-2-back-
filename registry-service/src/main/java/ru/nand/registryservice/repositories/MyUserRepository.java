@@ -8,6 +8,7 @@ import ru.nand.registryservice.entities.User;
 public interface MyUserRepository extends JpaRepository<User, Integer> {
     User findByUsername(String username);
     User findByEmail(String email);
+    void deleteByUsername(String username);
 }
 
 
