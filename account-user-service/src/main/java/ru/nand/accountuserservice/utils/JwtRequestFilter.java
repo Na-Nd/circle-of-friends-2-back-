@@ -70,7 +70,7 @@ public class JwtRequestFilter extends OncePerRequestFilter {
                         log.info("Аутентификация пользователя: {}, Роль: {}", username, role);
                     }
                 } else {
-                    log.warn("Токен не прошел валидацию");
+                    log.error("Токен не прошел валидацию");
                 }
             }
         } catch (Exception e) {

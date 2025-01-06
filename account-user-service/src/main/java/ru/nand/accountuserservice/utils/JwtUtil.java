@@ -10,6 +10,8 @@ import io.jsonwebtoken.security.Keys;
 
 import java.security.Key;
 import java.util.Date;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.function.Function;
 
 @Slf4j
@@ -18,12 +20,22 @@ public class JwtUtil {
     @Value("${jwt.secret}")
     private String secretKey;
 
+    @Value("${spring.application.name}")
+    private String serviceName;
+
     @Value("${jwt.expiration}")
     private long expiration;
+
+    @Value("${service.jwt.secret}")
+    private String serviceSecretKey;
 
     // Создать ключ на основе массива байт
     private Key getSigningKey(){
         return Keys.hmacShaKeyFor(secretKey.getBytes());
+    }
+
+    private Key getInterServiceSigningKey(){
+        return Keys.hmacShaKeyFor(serviceSecretKey.getBytes());
     }
 
     // Извлечь имя
@@ -71,6 +83,7 @@ public class JwtUtil {
                     .setSigningKey(getSigningKey())
                     .build()
                     .parseClaimsJws(token);
+
             return true;
         } catch (Exception e){
             log.error("Ошибка валидации токена: {}", e.getMessage());
@@ -92,5 +105,24 @@ public class JwtUtil {
             return bearer.substring(7);
         }
         return null;
+    }
+
+    // Генерация межсервисного JWT
+    public String generateInterServiceJwt(){
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("service_role", "ROLE_SERVICE");
+
+        return createInterServiceToken(claims);
+    }
+
+    // Создание межсервисного JWT
+    private String createInterServiceToken(Map<String, Object> claims) {
+        return Jwts.builder()
+                .setClaims(claims)
+                .setSubject(serviceName)
+                .setIssuedAt(new Date(System.currentTimeMillis()))
+                .setExpiration(new Date(System.currentTimeMillis() + expiration))
+                .signWith(getInterServiceSigningKey())
+                .compact();
     }
 }

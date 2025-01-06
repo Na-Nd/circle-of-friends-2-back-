@@ -1,7 +1,6 @@
 package ru.nand.accountuserservice.services;
 
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -11,8 +10,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 import ru.nand.accountuserservice.entities.requests.AccountPatchRequest;
+import ru.nand.accountuserservice.utils.JwtUtil;
 import ru.nand.sharedthings.DTO.AccountPatchDTO;
-import ru.nand.sharedthings.utils.KeyGenerator;
 
 import java.util.Arrays;
 import java.util.List;
@@ -21,13 +20,8 @@ import java.util.List;
 @Service
 public class AccountService {
     private final RestTemplate restTemplate;
+    private final JwtUtil jwtUtil;
     private final PasswordEncoder passwordEncoder;
-
-    @Value("${interservice.secret.key}")
-    private String SECRET_KEY;
-
-    @Value("${myplug}") // Заглушка, так как метод для шифрования написан для шифрования токена
-    private String TOKEN_VALUE;
 
     @Value("${interservice.header.name}")
     private String HEADER_NAME;
@@ -35,146 +29,181 @@ public class AccountService {
     @Value("${registry.service.url}")
     private String REGISTRY_SERVICE_URL;
 
-    @Autowired
-    public AccountService(RestTemplate restTemplate, PasswordEncoder passwordEncoder) {
+    public AccountService(RestTemplate restTemplate, JwtUtil jwtUtil, PasswordEncoder passwordEncoder) {
         this.restTemplate = restTemplate;
+        this.jwtUtil = jwtUtil;
         this.passwordEncoder = passwordEncoder;
     }
 
-    private HttpHeaders buildHeaders(){
-        HttpHeaders headers = new HttpHeaders();
-        headers.set(HEADER_NAME, KeyGenerator.generateKey(SECRET_KEY, TOKEN_VALUE));
-        return headers;
-    }
-
-    public int getFollowersCount(String username){
+    public int getFollowersCount(String username) throws RuntimeException {
         String url = REGISTRY_SERVICE_URL + "/api/users/" + username + "/followers/count";
-        HttpEntity<Void> request = new HttpEntity<>(buildHeaders());
-        log.debug("Запрос к registry-service на получение количества подписчиков пользователя {}", username);
 
+        HttpHeaders headers = new HttpHeaders();
+        headers.set(HEADER_NAME, "Bearer " + jwtUtil.generateInterServiceJwt());
+
+        HttpEntity<Void> requestEntity = new HttpEntity<>(headers);
+
+        log.debug("Запрос к registry-service на получение количества подписчиков аккаунта {}", username);
         try{
             ResponseEntity<Integer> response = restTemplate.exchange(
                     url,
                     HttpMethod.GET,
-                    request,
+                    requestEntity,
                     Integer.class
             );
-            // TODO: Если в response null, то положить "нет подписчиков"
             return response.getBody();
         } catch (Exception e) {
-            log.error("Ошибка получения количества подписчиков для пользователя {}: {}", username, e.getMessage());
-            throw new RuntimeException("Ошибка получения количества подписчиков");
+            log.error("Ошибка при получении подписчиков аккаунта {}: {}", username, e.getMessage());
+            throw new RuntimeException("Ошибка получения количества подписчиков: " + e.getMessage());
         }
     }
 
-    public List<String> getAllUsernames(){
+    public List<String> getAllUsernames() throws RuntimeException {
         String url = REGISTRY_SERVICE_URL + "/api/users";
-        HttpEntity<Void> request = new HttpEntity<>(buildHeaders());
-        log.debug("Запрос к registry-service на получение списка username'ов всех аккаунтов");
 
+        HttpHeaders headers = new HttpHeaders();
+        headers.set(HEADER_NAME, "Bearer " + jwtUtil.generateInterServiceJwt());
+
+        HttpEntity<Void> requestEntity = new HttpEntity<>(headers);
+
+        log.debug("Запрос к registry-service на получение списка username'ов всех аккаунтов");
         try{
-            ResponseEntity<String[]> response = restTemplate.exchange(
+            ResponseEntity<String []> response = restTemplate.exchange(
                     url,
                     HttpMethod.GET,
-                    request,
+                    requestEntity,
                     String[].class
             );
-            // TODO: Если в response null, то положить "нет пользователей"
 
             return Arrays.asList(response.getBody());
-        } catch (Exception e) {
+        } catch (Exception e){
             log.error("Ошибка при получении списка пользователей: {}", e.getMessage());
-            throw new RuntimeException("Ошибка получения списка пользователей");
+            throw new RuntimeException("Ошибка получения списка пользователей: " + e.getMessage());
         }
     }
 
-    public void patchAccount(AccountPatchRequest accountPatchRequest, String firstUsername){
+    public void patchAccount(AccountPatchRequest accountPatchRequest, String firstUsername) throws RuntimeException {
         String url = REGISTRY_SERVICE_URL + "/api/users/edit";
 
-        // Формируем дто на основе request'а
+        // Формируем DTO для отправки на основе reauest'а
         AccountPatchDTO accountPatchDTO = new AccountPatchDTO();
         accountPatchDTO.setUsername(accountPatchRequest.getUsername());
-        // Отправим сразу зашифрованный пароль если он не null
         if(accountPatchRequest.getPassword() != null){
             accountPatchDTO.setPassword(passwordEncoder.encode(accountPatchRequest.getPassword()));
         } else {
-            accountPatchDTO.setPassword(null); // Чтобы encode() не зашифровал null, а то непонятно что будет
+            accountPatchDTO.setPassword(null); // Чтобы encode() не зашифровал null
         }
         accountPatchDTO.setEmail(accountPatchRequest.getEmail());
         accountPatchDTO.setFirstUsername(firstUsername);
 
-        HttpEntity<AccountPatchDTO> request = new HttpEntity<>(accountPatchDTO, buildHeaders());
-        log.debug("Запрос к registry-service на обновление данных аккаунта пользователя");
+        HttpHeaders headers = new HttpHeaders();
+        headers.set(HEADER_NAME, "Bearer " + jwtUtil.generateInterServiceJwt());
 
+        HttpEntity<AccountPatchDTO> requestEntity = new HttpEntity<>(accountPatchDTO, headers);
+
+        log.debug("Запрос к registry-service на обновление данных аккаунта пользователя");
         try{
             restTemplate.exchange(
                     url,
                     HttpMethod.PATCH,
-                    request,
+                    requestEntity,
                     Void.class
             );
-        } catch (Exception e) {
-            log.error(e.getMessage());
-            throw new RuntimeException("Ошибка обновления данных аккаунта");
+        } catch (Exception e){
+            log.error("Ошибка обновления данных аккаунта: {}", e.getMessage());
+            throw new RuntimeException("Ошибка обновления данных аккаунта: " + e.getMessage());
         }
     }
 
-    public void deleteAccount(String username){
+    public void deleteAccount(String username) throws RuntimeException {
         String url = REGISTRY_SERVICE_URL + "/api/users/" + username;
-        HttpEntity<Void> request = new HttpEntity<>(buildHeaders());
-        log.debug("Запрос к registry-service на удаление аккаунта пользователя {}", username);
 
+        HttpHeaders headers = new HttpHeaders();
+        headers.set(HEADER_NAME, "Bearer " + jwtUtil.generateInterServiceJwt());
+
+        HttpEntity<Void> requestEntity = new HttpEntity<>(headers);
+
+        log.debug("Запрос к registry-service на удаление аккаунта пользователя {}", username);
         try{
             restTemplate.exchange(
                     url,
                     HttpMethod.DELETE,
-                    request,
+                    requestEntity,
                     Void.class
             );
         } catch (Exception e){
             log.error("Ошибка удаления аккаунта пользователя {}: {}", username, e.getMessage());
-            throw new RuntimeException("Ошибка удаления аккаунта");
+            throw new RuntimeException("Ошибка удаления аккаунта: " + e.getMessage());
         }
     }
 
-    public List<String> getFollowers(String username){
+    public List<String> getFollowers(String username) throws RuntimeException {
         String url = REGISTRY_SERVICE_URL + "/api/users/" + username + "/followers";
-        HttpEntity<Void> request = new HttpEntity<>(buildHeaders());
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.set(HEADER_NAME, "Bearer " + jwtUtil.generateInterServiceJwt());
+
+        HttpEntity<Void> requestEntity = new HttpEntity<>(headers);
+
         log.debug("Запрос к registry-service на получение списка подписчиков пользователя {}", username);
+        try{
+            ResponseEntity<String[]> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    requestEntity,
+                    String[].class
+            );
 
-        try {
-            ResponseEntity<String[]> response = restTemplate.exchange(url, HttpMethod.GET, request, String[].class);
             return Arrays.asList(response.getBody());
-        } catch (Exception e) {
+        } catch (Exception e){
             log.error("Ошибка получения подписчиков пользователя {}: {}", username, e.getMessage());
-            throw new RuntimeException("Ошибка получения подписчиков");
+            throw new RuntimeException("Ошибка получения подписчиков: " + e.getMessage());
         }
     }
 
-    public List<String> getFollowing(String username) {
+    public List<String> getFollowing(String username) throws RuntimeException {
         String url = REGISTRY_SERVICE_URL + "/api/users/" + username + "/following";
-        HttpEntity<Void> request = new HttpEntity<>(buildHeaders());
-        log.debug("Запрос к registry-service на получение списка подписок пользователя {}", username);
 
-        try {
-            ResponseEntity<String[]> response = restTemplate.exchange(url, HttpMethod.GET, request, String[].class);
+        HttpHeaders headers = new HttpHeaders();
+        headers.set(HEADER_NAME, "Bearer " + jwtUtil.generateInterServiceJwt());
+
+        HttpEntity<Void> requestEntity = new HttpEntity<>(headers);
+
+        log.debug("Запрос к registry-service на получение списка подписок пользователя {}", username);
+        try{
+            ResponseEntity<String[]> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    requestEntity,
+                    String[].class
+            );
+
             return Arrays.asList(response.getBody());
-        } catch (Exception e) {
+        } catch (Exception e){
             log.error("Ошибка получения подписок пользователя {}: {}", username, e.getMessage());
-            throw new RuntimeException("Ошибка получения подписок");
+            throw new RuntimeException("Ошибка получения подписок: " + e.getMessage());
         }
     }
 
-    public void followUser(String currentUsername, String targetUsername) {
+    public void followUser(String currentUsername, String targetUsername) throws RuntimeException {
         String url = REGISTRY_SERVICE_URL + "/api/users/" + currentUsername + "/follow/" + targetUsername;
-        HttpEntity<Void> request = new HttpEntity<>(buildHeaders());
-        log.debug("Запрос к registry-service на подписку текущего пользователя {} на аккаунт целевого пользователя {}", currentUsername, targetUsername);
 
+        HttpHeaders headers = new HttpHeaders();
+        headers.set(HEADER_NAME, "Bearer " + jwtUtil.generateInterServiceJwt());
+
+        HttpEntity<Void> requestEntity = new HttpEntity<>(headers);
+
+        log.debug("Запрос к registry-service на подписку текущего пользователя {} на аккаунт целевого пользователя {}", currentUsername, targetUsername);
         try {
-            restTemplate.exchange(url, HttpMethod.POST, request, Void.class);
-        } catch (Exception e) {
+            restTemplate.exchange(
+                    url,
+                    HttpMethod.POST,
+                    requestEntity,
+                    Void.class
+            );
+        } catch (Exception e){
             log.error("Ошибка подписки пользователя {} на {}: {}", currentUsername, targetUsername, e.getMessage());
-            throw new RuntimeException("Ошибка подписки на пользователя");
+            throw new RuntimeException("Ошибка подписки на пользователя: " + e.getMessage());
         }
     }
 

@@ -40,6 +40,7 @@ public class KafkaUserAuthListener {
             return;
         }
 
+        // TODO сделать в сервисе что-то типа enrichUser()
         User user = new User();
         user.setUsername(registerDTO.getUsername());
         user.setEmail(registerDTO.getEmail());

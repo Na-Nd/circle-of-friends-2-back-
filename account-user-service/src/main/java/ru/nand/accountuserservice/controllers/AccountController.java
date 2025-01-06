@@ -4,16 +4,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import lombok.extern.slf4j.Slf4j;
 import ru.nand.accountuserservice.entities.requests.AccountPatchRequest;
 import ru.nand.accountuserservice.services.AccountService;
 
 import java.util.List;
-
-
-// TODO: Попробовать try с ресурсами
 
 @RestController
 @RequestMapping("/account")

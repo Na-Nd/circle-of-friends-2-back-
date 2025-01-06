@@ -25,6 +25,12 @@ public class JwtUtil {
     @Value("${jwt.secret}")
     private String secretKey;
 
+    @Value("${interservice.header.name}")
+    private String HEADER_NAME;
+
+    @Value("${accountuserservice.jwt.secret}")
+    private String serviceSecret;
+
     @Value("${jwt.expiration}")
     private long expiration;
 
@@ -39,8 +45,16 @@ public class JwtUtil {
         return Keys.hmacShaKeyFor(secretKey.getBytes());
     }
 
+    private Key getServiceKey(){
+        return Keys.hmacShaKeyFor(serviceSecret.getBytes());
+    }
+
     public String extractUsername(String token) {
         return extractClaim(token, Claims::getSubject);
+    }
+
+    public String extractServiceName(String token){
+        return extractClaimFromInterServiceToken(token, Claims::getSubject);
     }
 
     public Date extractExpiration(String token) {
@@ -52,9 +66,22 @@ public class JwtUtil {
         return claimsResolver.apply(claims);
     }
 
+    public <T> T extractClaimFromInterServiceToken(String token, Function<Claims, T> claimsResolver) {
+        final Claims claims = extractAllClaimsFromInterServiceToken(token);
+        return claimsResolver.apply(claims);
+    }
+
     private Claims extractAllClaims(String token) {
         return Jwts.parserBuilder()
                 .setSigningKey(getSigningKey())
+                .build()
+                .parseClaimsJws(token)
+                .getBody();
+    }
+
+    private Claims extractAllClaimsFromInterServiceToken(String token){
+        return Jwts.parserBuilder()
+                .setSigningKey(getServiceKey())
                 .build()
                 .parseClaimsJws(token)
                 .getBody();
@@ -72,6 +99,7 @@ public class JwtUtil {
         return createToken(claims, userDetails.getUsername());
     }
 
+    // TODO private mb
     public String createToken(Map<String, Object> claims, String subject) {
         return Jwts.builder()
                 .setClaims(claims)
@@ -115,18 +143,35 @@ public class JwtUtil {
         return null;
     }
 
-    public String extractUsernameIgnoringExpiration(String token) {
-        try {
-            Claims claims = Jwts.parserBuilder()
-                    .setSigningKey(getSigningKey())
-                    .build()
-                    .parseClaimsJws(token) // Используем parseClaimsJws, который не проверяет истечение срока
-                    .getBody();
-            return claims.getSubject();
-        } catch (Exception e) {
-            log.warn("Ошибка при извлечении имени пользователя из токена: {}", e.getMessage());
-            return null; // Если ошибка, возвращаем null
+    public String resolveInterServiceToken(HttpServletRequest request) {
+        String bearer = request.getHeader(HEADER_NAME);
+
+        if(bearer != null && bearer.startsWith("Bearer ")){
+            log.info("Bearer межсервисоного токена перед отсечением: {}", bearer);
+            return bearer.substring(7);
         }
+        return null;
     }
 
+    public String extractRole(String token) {
+        return extractClaim(token, claims -> claims.get("role", String.class));
+    }
+
+    public String extractRoleFromInterServiceJwt(String token){
+        return extractClaimFromInterServiceToken(token, claims -> claims.get("service_role", String.class));
+    }
+
+    public boolean validateInterServiceJwt(String interServiceJwt) {
+        try{
+            Jwts.parserBuilder()
+                    .setSigningKey(getServiceKey())
+                    .build()
+                    .parseClaimsJws(interServiceJwt);
+
+            return true;
+        } catch (Exception e){
+            log.error("Ошибка валидации токена: {}", e.getMessage());
+            return false;
+        }
+    }
 }
