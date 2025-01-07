@@ -14,6 +14,7 @@ import ru.nand.sharedthings.DTO.RegisterDTO;
 import ru.nand.sharedthings.utils.EncryptionUtil;
 
 import java.time.Duration;
+import java.util.UUID;
 
 @Slf4j
 @RestController
@@ -29,63 +30,50 @@ public class AuthController {
     public Mono<Object> registerUser(@RequestBody RegisterDTO userDTO) {
         // Шифруем пароль перед отправкой
         userDTO.setPassword(EncryptionUtil.encrypt(userDTO.getPassword()));
-
+        String expectedRequestId = UUID.randomUUID().toString();
+        userDTO.setRequestId(expectedRequestId);
         log.info("Отправка сообщения регистрации в топик user-registration-topic: {}", userDTO);
 
-        // Отправка сообщения в Kafka и ожидание ответа
-        return Mono.fromFuture(() -> kafkaTemplate.send("user-registration-topic", userDTO)) // kafkaTemplate.send - отправляет сообщение в брокер и возвращает CompletableFuture, который отслеживает статус отправки. Mono.fromFuture оборачивает полученный CompletableFuture в реактивный объект Mono //TODO что это такое Mono и как работает
-                .flatMap(result -> waitForResponse("user-registration-response-topic", userDTO.getUsername())) // После отправки сообщения дожидаемся ответа от брокера (waitForResponse - логика ожидания ответа) // TODO что такое flatMap и как работает?
-                .timeout(Duration.ofSeconds(10), Mono.just("Ошибка: ответ от Kafka не получен вовремя")) // Если ответ не пришел, вернем ошибку // TODO что такое Mono.just?
-                .doOnSuccess(aVoid -> log.info("Регистрация пользователя завершена")); // Если метод завершился успешно
+        return Mono.fromFuture(() -> kafkaTemplate.send("user-registration-topic", userDTO))
+                .flatMap(result -> waitForResponse(expectedRequestId)) // Ждем ответ по этому requestId
+                .timeout(Duration.ofSeconds(10), Mono.just("Ошибка: ответ от Kafka не получен вовремя"))
+                .doOnSuccess(aVoid -> log.info("Регистрация пользователя завершена"));
     }
 
     // Аналогично, как и при регистрации будем создавать асинхронный процесс
     @PostMapping("/login")
     public Mono<Object> loginUser(@RequestBody LoginDTO loginDTO) {
+        System.out.println("Поступил ДТО:" + loginDTO);
         // Шифруем пароль перед отправкой
         loginDTO.setPassword(EncryptionUtil.encrypt(loginDTO.getPassword()));
 
+        String requestId = UUID.randomUUID().toString(); // Генерируем уникальный идентификатор запроса
+        loginDTO.setRequestId(requestId);
+
         log.info("Отправка сообщения логина в топик user-login-topic: {}", loginDTO);
 
-        // Сброс предыдущего состояния токена перед новым запросом
-        kafkaJwtListener.resetToken();
-
+        // Сброс состояния токена перед новым запросом
+        kafkaJwtListener.resetToken(requestId);
+        System.out.println("Отправил " + loginDTO + " в брокер");
         // Отправка сообщения в Kafka и ожидание ответа
         return Mono.fromFuture(() -> kafkaTemplate.send("user-login-topic", loginDTO))
-                .flatMap(result -> waitForResponse("user-login-response-topic", loginDTO.getUsername()))
-                .timeout(Duration.ofSeconds(10), Mono.just("Ошибка: ответ от Kafka не получен вовремя"))
-                .doOnSuccess(aVoid -> log.info("Логин пользователя завершен"));
+                .flatMap(result -> waitForResponse(requestId)) // Передаём только requestId
+                .timeout(Duration.ofSeconds(15), Mono.just("Ошибка: ответ от Kafka не получен вовремя"))
+                .doOnSuccess(aVoid -> log.info("Логин пользователя завершён"));
     }
 
-    private Mono<Object> waitForResponse(String topic, String username) {
-        return Mono.defer(() -> Mono.create(sink -> { // Mono.defer - Создает новый Mono каждый раз при вызове, чтобы внутренняя логика выполнялась заново для каждого нового вызова. Mono.create - Позволяет вручную отправлять события завершения (успех / ошибка) в реактивную цепочку
-                    // Запускаем цикл ожидания токена
-                    new Thread(() -> {
-                        int retries = 20; // Максимальное количество попыток (20 раз по 1000мс)
-                        String token = null;
 
-                        for (int i = 0; i < retries; i++) {
-                            token = kafkaJwtListener.getJwtToken();
-
-                            if (token != null) {
-                                sink.success(token); // Успешно завершаем поток с токеном
-                                return;
-                            }
-
-                            try {
-                                Thread.sleep(1000); // Ждём секунду перед следующей попыткой (или 500мс)
-                            } catch (InterruptedException e) {
-                                Thread.currentThread().interrupt();
-                                sink.error(new RuntimeException("Поток ожидания был прерван", e));
-                                return;
-                            }
-                        }
-
-                        sink.success("Ошибка: JWT не получен"); // Возвращаем ошибку, если время ожидания истекло
-                    }).start();
-                }))
-                .doOnSuccess(token -> log.info("Получен JWT токен: {}", token))
-                .doOnError(error -> log.error("Ошибка при получении токена: {}", error.getMessage()));
+    private Mono<Object> waitForResponse(String requestId) {
+        System.out.println("Попал в waitForResponse");
+        return Mono.defer(() -> {
+            String token = kafkaJwtListener.getJwtToken(requestId);
+            System.out.println("Токен: " + token);
+            if (token != null) {
+                kafkaJwtListener.resetToken(requestId);
+                return Mono.just(token);
+            }
+            return Mono.delay(Duration.ofSeconds(1))
+                    .flatMap(ignored -> waitForResponse(requestId));
+        });
     }
-
 }

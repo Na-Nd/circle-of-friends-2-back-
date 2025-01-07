@@ -1,11 +1,8 @@
 package ru.nand.sharedthings.DTO;
-
-
 import jakarta.validation.constraints.NotBlank;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
 
 @Data
 @AllArgsConstructor
@@ -16,4 +13,6 @@ public class LoginDTO {
 
     @NotBlank(message = "Пароль не должен быть пустым")
     private String password;
+
+    private String requestId;
 }

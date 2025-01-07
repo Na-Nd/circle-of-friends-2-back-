@@ -1,7 +1,10 @@
 package ru.nand.registryservice.services;
 
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.security.Keys;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
@@ -11,18 +14,26 @@ import ru.nand.registryservice.repositories.MyUserRepository;
 import ru.nand.registryservice.utils.JwtUtil;
 import ru.nand.sharedthings.DTO.AccountPatchDTO;
 
+import java.security.Key;
+import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Slf4j
 @Service
 public class UserService implements UserDetailsService {
     private final MyUserRepository userRepository;
-    private final JwtUtil jwtUtil;
+
+    @Value("${jwt.expiration}")
+    private long expiration;
+
+    @Value("${jwt.secret}")
+    private String secretKey;
 
     @Autowired
-    public UserService(MyUserRepository userRepository, JwtUtil jwtUtil) {
+    public UserService(MyUserRepository userRepository) {
         this.userRepository = userRepository;
-        this.jwtUtil = jwtUtil;
     }
 
     public void save(User user) {
@@ -126,7 +137,8 @@ public class UserService implements UserDetailsService {
             user.setPassword(accountPatchDTO.getPassword());
         }
 
-        String newJwt = jwtUtil.generateToken(user);
+        // TODO без jwtUtil чтобы не было цикличной зависимости
+        String newJwt = generateToken(user);
 
         userRepository.save(user);
         log.debug("Данные пользователя обновлены: {}", user);
@@ -136,6 +148,32 @@ public class UserService implements UserDetailsService {
 
     public void deleteUser(String username) {
         userRepository.deleteByUsername(username);
+    }
+
+
+
+
+
+    public String generateToken(UserDetails userDetails) {
+        Map<String, Object> claims = new HashMap<>();
+        User user = userRepository.findByUsername(userDetails.getUsername());
+
+        claims.put("role", user.getRole().name());
+        return createToken(claims, userDetails.getUsername());
+    }
+
+    private String createToken(Map<String, Object> claims, String subject) {
+        return Jwts.builder()
+                .setClaims(claims)
+                .setSubject(subject)
+                .setIssuedAt(new Date(System.currentTimeMillis()))
+                .setExpiration(new Date(System.currentTimeMillis() + expiration))
+                .signWith(getSigningKey())
+                .compact();
+    }
+
+    private Key getSigningKey(){
+        return Keys.hmacShaKeyFor(secretKey.getBytes());
     }
 }
 

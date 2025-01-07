@@ -4,31 +4,42 @@ import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Service;
+import ru.nand.sharedthings.DTO.ResponseDTO;
+
+import java.util.concurrent.ConcurrentHashMap;
 
 @Getter
 @Slf4j
 @Service
 public class KafkaJwtListener {
 
-    private volatile String jwtToken;  // Чтобы потоки работали с актуальным значением токена
+    private final ConcurrentHashMap<String, String> tokenStore = new ConcurrentHashMap<>();
 
     @KafkaListener(topics = "user-registration-response-topic", groupId = "auth-group")
-    public void listenJwtToken(String token){
-        // Токен - это ответ от сервиса реестров (тут может быть токен или ошибки всякие)
-        this.jwtToken = token;
-        log.info("Получен JWT после регистрации из Kafka: {}", token);
+    public void listenRegistrationJwtToken(ResponseDTO responseDTO) {
+        System.out.println("Пришел ResponseDTO: " + responseDTO);
+        tokenStore.put(responseDTO.getRequestId(), responseDTO.getToken());
+        System.out.println("Получен JWT после регистрации для requestId:" + responseDTO.getRequestId() + ", " + responseDTO.getToken());
+        log.info("Получен JWT после регистрации для requestId {}: {}", responseDTO.getRequestId(), responseDTO.getToken());
     }
 
     @KafkaListener(topics = "user-login-response-topic", groupId = "auth-group")
-    public void listenLoginJwtToken(String token){
-        this.jwtToken = token;
-        log.info("Получен JWT после логина из Kafka: {}", token);
+    public void listenLoginJwtToken(ResponseDTO responseDTO) {
+        System.out.println("Пришел ResponseDTO: " + responseDTO);
+        tokenStore.put(responseDTO.getRequestId(), responseDTO.getToken());
+        System.out.println("Получен JWT после логина для requestId:" + responseDTO.getRequestId() + ", " + responseDTO.getToken());
+        log.info("Получен JWT после логина для requestId {}: {}", responseDTO.getRequestId(), responseDTO.getToken());
     }
 
-    // Сброс токена перед новым запросом
-    public void resetToken() {
-        this.jwtToken = null;
-        log.info("Сброшен токен перед новым запросом.");
+    public String getJwtToken(String requestId) {
+        System.out.println("Получаю токен с id" + requestId);
+        System.out.println("Результат .get(requestId): " + tokenStore.get(requestId));
+        return tokenStore.get(requestId);
+    }
+
+    public void resetToken(String requestId) {
+        System.out.println("Удаляю токен с id" + requestId);
+        tokenStore.remove(requestId);
     }
 
 }

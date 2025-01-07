@@ -22,4 +22,5 @@ public class RegisterDTO {
     @NotBlank(message = "Пароль не должен быть пустым")
     private String password;
 
+    private String requestId;
 }

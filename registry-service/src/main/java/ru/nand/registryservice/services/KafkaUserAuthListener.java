@@ -11,6 +11,7 @@ import ru.nand.registryservice.entities.User;
 import ru.nand.registryservice.utils.JwtUtil;
 import ru.nand.sharedthings.DTO.LoginDTO;
 import ru.nand.sharedthings.DTO.RegisterDTO;
+import ru.nand.sharedthings.DTO.ResponseDTO;
 import ru.nand.sharedthings.utils.EncryptionUtil;
 
 import java.time.LocalDateTime;
@@ -28,19 +29,16 @@ public class KafkaUserAuthListener {
     public void handleRegistration(RegisterDTO registerDTO) {
         log.info("Получено сообщение о регистрации: {}", registerDTO);
 
-        // Расшифровываем пароль
         String decryptedPassword = EncryptionUtil.decrypt(registerDTO.getPassword());
         registerDTO.setPassword(decryptedPassword);
-        System.out.println(registerDTO);
 
         User existingUser = userService.findByUsername(registerDTO.getUsername());
 
         if (existingUser != null) {
-            sendResponse("user-registration-response-topic", "Ошибка: пользователь уже существует.");
+            sendResponse("user-registration-response-topic", registerDTO.getRequestId(), "Ошибка: пользователь уже существует.");
             return;
         }
 
-        // TODO сделать в сервисе что-то типа enrichUser()
         User user = new User();
         user.setUsername(registerDTO.getUsername());
         user.setEmail(registerDTO.getEmail());
@@ -50,37 +48,42 @@ public class KafkaUserAuthListener {
         userService.save(user);
 
         String token = jwtUtil.generateToken(user);
-        sendResponse("user-registration-response-topic", token);
+        sendResponse("user-registration-response-topic", registerDTO.getRequestId(), token);
     }
 
     @KafkaListener(topics = "user-login-topic", groupId = "registry-group")
     public void handleLogin(LoginDTO loginDTO) {
         log.info("Получено сообщение о логине: {}", loginDTO);
 
-        // Расшифровываем пароль
         String decryptedPassword = EncryptionUtil.decrypt(loginDTO.getPassword());
         loginDTO.setPassword(decryptedPassword);
 
         User user = userService.findByUsername(loginDTO.getUsername());
-        if(user == null){
-            sendResponse("user-login-response-topic", "Ошибка: пользователь не найден.");
+        if (user == null) {
+            sendResponse("user-login-response-topic", loginDTO.getRequestId(), "Ошибка: пользователь не найден.");
             return;
         }
-        if(user.getIsBlocked()){
-            sendResponse("user-login-response-topic", "Ошибка: пользователь заблокирован.");
+        if (user.getIsBlocked()) {
+            sendResponse("user-login-response-topic", loginDTO.getRequestId(), "Ошибка: пользователь заблокирован.");
             return;
         }
         if (!passwordEncoder.matches(loginDTO.getPassword(), user.getPassword())) {
-            sendResponse("user-login-response-topic", "Ошибка: неверные учетные данные.");
+            sendResponse("user-login-response-topic", loginDTO.getRequestId(), "Ошибка: неверные учетные данные.");
             return;
         }
-        
+
         String token = jwtUtil.generateToken(user);
-        sendResponse("user-login-response-topic", token);
+        System.out.println("Генерирую токен: " + token + " Для пользователя " + user.getUsername() + " и отправляю в брокер");
+        sendResponse("user-login-response-topic", loginDTO.getRequestId(), token);
     }
 
-    private void sendResponse(String topic, String message) {
-        kafkaTemplate.send(topic, message);
-        log.info("Ответ отправлен в топик {}: {}", topic, message);
+
+    private void sendResponse(String topic, String requestId, String message) {
+        System.out.println("Попал в sendResponse");
+        ResponseDTO responseDTO = new ResponseDTO(requestId, message);
+        System.out.println("Отправляю responseDTO: " + responseDTO.getRequestId() + ", " + responseDTO.getToken());
+        kafkaTemplate.send(topic, responseDTO);
+        log.info("Ответ отправлен в топик {}: {}", topic, responseDTO);
     }
+
 }
