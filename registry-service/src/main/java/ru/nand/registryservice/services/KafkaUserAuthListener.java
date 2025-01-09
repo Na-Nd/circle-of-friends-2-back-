@@ -79,9 +79,7 @@ public class KafkaUserAuthListener {
 
 
     private void sendResponse(String topic, String requestId, String message) {
-        System.out.println("Попал в sendResponse");
         ResponseDTO responseDTO = new ResponseDTO(requestId, message);
-        System.out.println("Отправляю responseDTO: " + responseDTO.getRequestId() + ", " + responseDTO.getToken());
         kafkaTemplate.send(topic, responseDTO);
         log.info("Ответ отправлен в топик {}: {}", topic, responseDTO);
     }

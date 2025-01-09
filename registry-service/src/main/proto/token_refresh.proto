@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+option java_package = "ru.nand.registryservice.grpc";
+option java_outer_classname = "TokenRefreshProto";
+
+service TokenRefreshService {
+  rpc RefreshToken (TokenRequest) returns (TokenResponse);
+}
+
+message TokenRequest {
+  string expired_token = 1;
+}
+
+message TokenResponse {
+  string new_token = 1;
+  string error_message = 2;
+}

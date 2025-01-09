@@ -1,4 +1,4 @@
-package ru.nand.accountuserservice.utils;
+package ru.nand.notificationsservice.utils;
 
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -12,7 +12,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
-import ru.nand.accountuserservice.services.TokenRefreshClient;
+import ru.nand.notificationsservice.services.TokenRefreshClient;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -32,36 +32,33 @@ public class JwtRequestFilter extends OncePerRequestFilter {
     }
 
     @Override
-    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
-            throws ServletException, IOException {
-        try {
+    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
+        try{
             String token = jwtUtil.resolveToken(request);
 
-            if (token != null) {
-                // Если токен скоро истечет
-                if (jwtUtil.isTokenExpiringSoon(token)) {
-                    log.info("Токен скоро истечет, запрашиваем новый токен");
+            if(token != null) {
+                if(jwtUtil.isTokenExpiringSoon(token)){
+                    log.info("Токен скоро истекает, запрашиваем новый токен");
                     String refreshedToken = tokenRefreshClient.refreshToken(token);
 
-                    // Обновляем токен
-                    if (refreshedToken != null) {
+                    if(refreshedToken != null){
                         log.info("Токен был успешно обновлен");
                         token = refreshedToken;
-                        // Устанавливаем новый токен в заголовок ответа
+
                         response.setHeader("Authorization", "Bearer " + token);
-                    } else {
+                    } else{
                         log.warn("Не удалось обновить токен");
                     }
                 }
 
-                if (jwtUtil.validateToken(token)) {
+                if(jwtUtil.validateToken(token)){
                     String username = jwtUtil.extractUsername(token);
                     String role = jwtUtil.extractRole(token);
 
-                    if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
+                    if(username != null && SecurityContextHolder.getContext().getAuthentication() == null){
                         UserDetails userDetails = new User(
-                                username,
-                                "",
+                              username,
+                              "",
                                 Collections.singleton(new SimpleGrantedAuthority(role))
                         );
 
@@ -71,15 +68,15 @@ public class JwtRequestFilter extends OncePerRequestFilter {
                         SecurityContextHolder.getContext().setAuthentication(authenticationToken);
                         log.debug("Пользователь в фильтре: {}, Роль: {}", username, role);
                     }
+
                 } else {
                     log.error("Токен не прошел валидацию");
                 }
             }
-        } catch (Exception e) {
+        } catch (Exception e){
             log.error("Ошибка JwtRequestFilter: {}", e.getMessage());
         }
 
         filterChain.doFilter(request, response);
     }
-
 }

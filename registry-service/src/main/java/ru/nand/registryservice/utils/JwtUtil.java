@@ -96,6 +96,7 @@ public class JwtUtil {
         User user = userService.findByUsername(userDetails.getUsername());
 
         claims.put("role", user.getRole().name());
+        claims.put("email", user.getEmail());
         return createToken(claims, userDetails.getUsername());
     }
 

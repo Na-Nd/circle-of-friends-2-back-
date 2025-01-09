@@ -43,7 +43,6 @@ public class AuthController {
     // Аналогично, как и при регистрации будем создавать асинхронный процесс
     @PostMapping("/login")
     public Mono<Object> loginUser(@RequestBody LoginDTO loginDTO) {
-        System.out.println("Поступил ДТО:" + loginDTO);
         // Шифруем пароль перед отправкой
         loginDTO.setPassword(EncryptionUtil.encrypt(loginDTO.getPassword()));
 
@@ -54,7 +53,6 @@ public class AuthController {
 
         // Сброс состояния токена перед новым запросом
         kafkaJwtListener.resetToken(requestId);
-        System.out.println("Отправил " + loginDTO + " в брокер");
         // Отправка сообщения в Kafka и ожидание ответа
         return Mono.fromFuture(() -> kafkaTemplate.send("user-login-topic", loginDTO))
                 .flatMap(result -> waitForResponse(requestId)) // Передаём только requestId
@@ -64,7 +62,6 @@ public class AuthController {
 
 
     private Mono<Object> waitForResponse(String requestId) {
-        System.out.println("Попал в waitForResponse");
         return Mono.defer(() -> {
             String token = kafkaJwtListener.getJwtToken(requestId);
             System.out.println("Токен: " + token);

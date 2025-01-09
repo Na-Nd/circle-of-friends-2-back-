@@ -17,28 +17,21 @@ public class KafkaJwtListener {
 
     @KafkaListener(topics = "user-registration-response-topic", groupId = "auth-group")
     public void listenRegistrationJwtToken(ResponseDTO responseDTO) {
-        System.out.println("Пришел ResponseDTO: " + responseDTO);
         tokenStore.put(responseDTO.getRequestId(), responseDTO.getToken());
-        System.out.println("Получен JWT после регистрации для requestId:" + responseDTO.getRequestId() + ", " + responseDTO.getToken());
         log.info("Получен JWT после регистрации для requestId {}: {}", responseDTO.getRequestId(), responseDTO.getToken());
     }
 
     @KafkaListener(topics = "user-login-response-topic", groupId = "auth-group")
     public void listenLoginJwtToken(ResponseDTO responseDTO) {
-        System.out.println("Пришел ResponseDTO: " + responseDTO);
         tokenStore.put(responseDTO.getRequestId(), responseDTO.getToken());
-        System.out.println("Получен JWT после логина для requestId:" + responseDTO.getRequestId() + ", " + responseDTO.getToken());
         log.info("Получен JWT после логина для requestId {}: {}", responseDTO.getRequestId(), responseDTO.getToken());
     }
 
     public String getJwtToken(String requestId) {
-        System.out.println("Получаю токен с id" + requestId);
-        System.out.println("Результат .get(requestId): " + tokenStore.get(requestId));
         return tokenStore.get(requestId);
     }
 
     public void resetToken(String requestId) {
-        System.out.println("Удаляю токен с id" + requestId);
         tokenStore.remove(requestId);
     }
 
