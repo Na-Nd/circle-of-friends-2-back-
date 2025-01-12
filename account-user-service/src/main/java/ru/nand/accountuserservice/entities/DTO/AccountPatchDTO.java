@@ -1,4 +1,4 @@
-package ru.nand.sharedthings.DTO;
+package ru.nand.accountuserservice.entities.DTO;
 
 import jakarta.validation.constraints.Email;
 import lombok.AllArgsConstructor;

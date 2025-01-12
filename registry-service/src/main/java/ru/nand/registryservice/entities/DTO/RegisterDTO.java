@@ -1,5 +1,4 @@
-package ru.nand.sharedthings.DTO;
-
+package ru.nand.registryservice.entities.DTO;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;

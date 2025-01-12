@@ -7,7 +7,7 @@ import org.springframework.web.bind.annotation.*;
 import ru.nand.registryservice.entities.User;
 import ru.nand.registryservice.services.UserService;
 import ru.nand.registryservice.utils.JwtUtil;
-import ru.nand.sharedthings.DTO.AccountPatchDTO;
+import ru.nand.registryservice.entities.DTO.AccountPatchDTO;
 
 import java.util.List;
 

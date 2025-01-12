@@ -1,4 +1,4 @@
-package ru.nand.sharedthings.DTO;
+package ru.nand.registryservice.entities.DTO;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;

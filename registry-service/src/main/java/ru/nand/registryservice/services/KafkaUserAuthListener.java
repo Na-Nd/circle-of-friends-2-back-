@@ -1,5 +1,7 @@
 package ru.nand.registryservice.services;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.annotation.KafkaListener;
@@ -9,10 +11,10 @@ import org.springframework.stereotype.Service;
 import ru.nand.registryservice.entities.ROLE.ROLE;
 import ru.nand.registryservice.entities.User;
 import ru.nand.registryservice.utils.JwtUtil;
-import ru.nand.sharedthings.DTO.LoginDTO;
-import ru.nand.sharedthings.DTO.RegisterDTO;
-import ru.nand.sharedthings.DTO.ResponseDTO;
-import ru.nand.sharedthings.utils.EncryptionUtil;
+import ru.nand.registryservice.entities.DTO.LoginDTO;
+import ru.nand.registryservice.entities.DTO.RegisterDTO;
+import ru.nand.registryservice.entities.DTO.ResponseDTO;
+import ru.nand.registryservice.utils.EncryptionUtil;
 
 import java.time.LocalDateTime;
 
@@ -22,11 +24,15 @@ import java.time.LocalDateTime;
 public class KafkaUserAuthListener {
     private final UserService userService;
     private final JwtUtil jwtUtil;
-    private final KafkaTemplate<String, Object> kafkaTemplate;
+    private final KafkaTemplate<String, String> kafkaTemplate;
     private final PasswordEncoder passwordEncoder;
 
     @KafkaListener(topics = "user-registration-topic", groupId = "registry-group")
-    public void handleRegistration(RegisterDTO registerDTO) {
+    public void handleRegistration(String message) throws JsonProcessingException {
+        ObjectMapper objectMapper = new ObjectMapper();
+        //TODO мб тоже try-catch
+        RegisterDTO registerDTO = objectMapper.readValue(message, RegisterDTO.class);
+
         log.info("Получено сообщение о регистрации: {}", registerDTO);
 
         String decryptedPassword = EncryptionUtil.decrypt(registerDTO.getPassword());
@@ -52,7 +58,10 @@ public class KafkaUserAuthListener {
     }
 
     @KafkaListener(topics = "user-login-topic", groupId = "registry-group")
-    public void handleLogin(LoginDTO loginDTO) {
+    public void handleLogin(String message) throws JsonProcessingException {
+        ObjectMapper objectMapper = new ObjectMapper();
+        //TODO мб тоже try-catch
+        LoginDTO loginDTO = objectMapper.readValue(message, LoginDTO.class);
         log.info("Получено сообщение о логине: {}", loginDTO);
 
         String decryptedPassword = EncryptionUtil.decrypt(loginDTO.getPassword());
@@ -78,10 +87,14 @@ public class KafkaUserAuthListener {
     }
 
 
-    private void sendResponse(String topic, String requestId, String message) {
+    private void sendResponse(String topic, String requestId, String message) throws JsonProcessingException {
         ResponseDTO responseDTO = new ResponseDTO(requestId, message);
-        kafkaTemplate.send(topic, responseDTO);
-        log.info("Ответ отправлен в топик {}: {}", topic, responseDTO);
+
+        ObjectMapper objectMapper = new ObjectMapper();
+        String jsonResponse = objectMapper.writeValueAsString(responseDTO); // Сериализация ответа в json
+
+        kafkaTemplate.send(topic, jsonResponse);
+        log.info("Ответ отправлен в топик {}: {}", topic, jsonResponse);
     }
 
 }

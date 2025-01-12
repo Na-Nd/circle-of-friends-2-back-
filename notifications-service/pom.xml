@@ -104,12 +104,32 @@
             <scope>test</scope>
         </dependency>
 
-        <!-- Shared Module Dependency -->
+        <!-- gRPC dependencies -->
         <dependency>
-            <groupId>ru.nand</groupId>
-            <artifactId>shared-things</artifactId>
-            <version>0.0.1-SNAPSHOT</version>
+            <groupId>io.grpc</groupId>
+            <artifactId>grpc-netty-shaded</artifactId>
+            <version>1.56.0</version>
         </dependency>
+        <dependency>
+            <groupId>io.grpc</groupId>
+            <artifactId>grpc-protobuf</artifactId>
+            <version>1.56.0</version>
+        </dependency>
+        <dependency>
+            <groupId>io.grpc</groupId>
+            <artifactId>grpc-stub</artifactId>
+            <version>1.56.0</version>
+        </dependency>
+        <dependency>
+            <groupId>com.google.protobuf</groupId>
+            <artifactId>protobuf-java</artifactId>
+            <version>4.28.2</version>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter</artifactId>
+        </dependency>
+
     </dependencies>
 
     <build>

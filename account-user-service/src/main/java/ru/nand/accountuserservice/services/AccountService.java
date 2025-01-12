@@ -11,8 +11,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 import ru.nand.accountuserservice.entities.requests.AccountPatchRequest;
 import ru.nand.accountuserservice.utils.JwtUtil;
-import ru.nand.sharedthings.DTO.AccountPatchDTO;
-
+import ru.nand.accountuserservice.entities.DTO.AccountPatchDTO;
 
 import java.util.Arrays;
 import java.util.List;

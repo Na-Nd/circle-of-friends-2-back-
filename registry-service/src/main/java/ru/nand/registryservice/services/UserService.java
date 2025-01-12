@@ -11,8 +11,7 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 import ru.nand.registryservice.entities.User;
 import ru.nand.registryservice.repositories.MyUserRepository;
-import ru.nand.registryservice.utils.JwtUtil;
-import ru.nand.sharedthings.DTO.AccountPatchDTO;
+import ru.nand.registryservice.entities.DTO.AccountPatchDTO;
 
 import java.security.Key;
 import java.util.Date;

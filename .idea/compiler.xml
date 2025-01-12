@@ -9,7 +9,6 @@
         <outputRelativeToContentRoot value="true" />
         <module name="auth-service" />
         <module name="account-user-service" />
-        <module name="shared-things" />
         <module name="registry-service" />
       </profile>
       <profile name="Annotation profile for notifications-service" enabled="true">
@@ -26,6 +25,7 @@
       <module name="account-service" target="21" />
       <module name="posts-service" target="21" />
       <module name="shared-dto" target="1.8" />
+      <module name="shared-things" target="21" />
       <module name="user-account-service" target="21" />
     </bytecodeTargetLevel>
   </component>
