@@ -82,7 +82,6 @@ public class KafkaUserAuthListener {
         }
 
         String token = jwtUtil.generateToken(user);
-        System.out.println("Генерирую токен: " + token + " Для пользователя " + user.getUsername() + " и отправляю в брокер");
         sendResponse("user-login-response-topic", loginDTO.getRequestId(), token);
     }
 

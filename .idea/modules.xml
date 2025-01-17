@@ -3,6 +3,7 @@
   <component name="ProjectModuleManager">
     <modules>
       <module fileurl="file://$PROJECT_DIR$/circle-of-friends2.iml" filepath="$PROJECT_DIR$/circle-of-friends2.iml" />
+      <module fileurl="file://$PROJECT_DIR$/notifications-service/notifications-service.iml" filepath="$PROJECT_DIR$/notifications-service/notifications-service.iml" />
     </modules>
   </component>
 </project>

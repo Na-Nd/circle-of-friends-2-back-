@@ -12,21 +12,21 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
-import ru.nand.notificationsservice.services.TokenRefreshClient;
 
 import java.io.IOException;
 import java.util.Collections;
 
 import org.springframework.security.core.userdetails.User;
+import ru.nand.notificationsservice.services.TokenRefreshGrpcClient;
 
 @Slf4j
 @Component
 public class JwtRequestFilter extends OncePerRequestFilter {
     private final JwtUtil jwtUtil;
-    private final TokenRefreshClient tokenRefreshClient;
+    private final TokenRefreshGrpcClient tokenRefreshClient;
 
     @Autowired
-    public JwtRequestFilter(JwtUtil jwtUtil, TokenRefreshClient tokenRefreshClient) {
+    public JwtRequestFilter(JwtUtil jwtUtil, TokenRefreshGrpcClient tokenRefreshClient) {
         this.jwtUtil = jwtUtil;
         this.tokenRefreshClient = tokenRefreshClient;
     }

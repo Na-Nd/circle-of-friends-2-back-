@@ -37,7 +37,7 @@ public class AccountController {
             return String.format("Hello, %s! Your role is %s.", username, role);
         } else {
             log.error("Пользователь не найден");
-            return "User not found";
+            return "Пользователь не найден";
         }
     }
 

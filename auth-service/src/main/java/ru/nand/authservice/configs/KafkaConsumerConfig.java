@@ -17,31 +17,11 @@ import java.util.Map;
 @EnableKafka
 public class KafkaConsumerConfig {
 
-//    @Bean
-//    public ConsumerFactory<String, Object> consumerFactory() {
-//        Map<String, Object> configProps = new HashMap<>();
-//        configProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
-//        configProps.put(ConsumerConfig.GROUP_ID_CONFIG, "auth-group");
-//        configProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-//        configProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, JsonDeserializer.class);
-//        configProps.put(JsonDeserializer.TRUSTED_PACKAGES, "*");  // TODO безопаснее shared-things указать, но пока так
-//
-//        return new DefaultKafkaConsumerFactory<>(configProps);
-//    }
-//
-//
-//    @Bean
-//    public ConcurrentKafkaListenerContainerFactory<String, Object> kafkaListenerContainerFactory() {
-//        ConcurrentKafkaListenerContainerFactory<String, Object> factory = new ConcurrentKafkaListenerContainerFactory<>();
-//        factory.setConsumerFactory(consumerFactory());
-//        return factory;
-//    }
-
     @Bean
     public ConsumerFactory<String, String> consumerFactory(){
         Map<String, Object> configProps = new HashMap<>();
         configProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
-        configProps.put(ConsumerConfig.GROUP_ID_CONFIG, "auth-group"); // или registry-group
+        configProps.put(ConsumerConfig.GROUP_ID_CONFIG, "auth-group");
         configProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class); // Ключ как строка
         configProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class); // Значение как строка
 

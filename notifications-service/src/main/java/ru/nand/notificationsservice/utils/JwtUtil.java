@@ -48,6 +48,12 @@ public class JwtUtil {
         return extractClaim(token, claims -> claims.get("role", String.class));
     }
 
+    // Извлечь почту
+    public String extractEmail(String token) {
+        return extractClaim(token, claims -> claims.get("email", String.class));
+    }
+
+
     // Извлечь конкретные данные
     public <T> T extractClaim(String token, Function<Claims, T> claimsResolver) throws RuntimeException {
         final Claims claims = extractAllClaims(token);

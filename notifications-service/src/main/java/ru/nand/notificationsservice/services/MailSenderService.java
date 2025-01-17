@@ -30,6 +30,5 @@ public class MailSenderService {
 
         log.debug("Отправил сообщение: {}", message);
         mailSender.send(message);
-        // TODO Накатить логи и проверку токена как в Account-User-Service, сделать такой же тестовый эндпоинт: достать из токена eamil пользователя и кинуть ему приветственное сообщение
     }
 }
