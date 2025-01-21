@@ -40,6 +40,11 @@ public class KafkaUserAuthListener {
 
         User existingUser = userService.findByUsername(registerDTO.getUsername());
 
+        if(!registerDTO.isEmailVerified()){
+            sendResponse("user-registration-response-topic", registerDTO.getRequestId(), "Ошибка: email не подтвержден.");
+            return;
+        }
+
         if (existingUser != null) {
             sendResponse("user-registration-response-topic", registerDTO.getRequestId(), "Ошибка: пользователь уже существует.");
             return;

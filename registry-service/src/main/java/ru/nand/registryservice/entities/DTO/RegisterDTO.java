@@ -22,4 +22,6 @@ public class RegisterDTO {
     private String password;
 
     private String requestId;
+
+    private boolean emailVerified;
 }

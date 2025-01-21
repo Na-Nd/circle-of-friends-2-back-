@@ -1,4 +1,4 @@
-package ru.nand.notificationsservice.services;
+package ru.nand.accountuserservice.services;
 
 import io.grpc.StatusRuntimeException;
 import lombok.extern.slf4j.Slf4j;
@@ -27,5 +27,4 @@ public class TokenRefreshGrpcClient {
             throw new RuntimeException("Ошибка при обновлении токена: " + e.getStatus());
         }
     }
-
 }
