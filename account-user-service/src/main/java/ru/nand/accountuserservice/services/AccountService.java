@@ -1,5 +1,7 @@
 package ru.nand.accountuserservice.services;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
@@ -82,38 +84,46 @@ public class AccountService {
         }
     }
 
-    public void patchAccount(AccountPatchRequest accountPatchRequest, String firstUsername) throws RuntimeException {
+    public void patchAccount(AccountPatchRequest accountPatchRequest, String firstUsername) {
         String url = REGISTRY_SERVICE_URL + "/api/users/edit";
 
-        // Формируем DTO для отправки на основе reauest'а
+        System.out.println("URL edit:" + url);
+        // Формируем DTO для отправки
         AccountPatchDTO accountPatchDTO = new AccountPatchDTO();
         accountPatchDTO.setUsername(accountPatchRequest.getUsername());
-        if(accountPatchRequest.getPassword() != null){
-            accountPatchDTO.setPassword(passwordEncoder.encode(accountPatchRequest.getPassword()));
-        } else {
-            accountPatchDTO.setPassword(null); // Чтобы encode() не зашифровал null
-        }
+        accountPatchDTO.setPassword(
+                accountPatchRequest.getPassword() != null ? passwordEncoder.encode(accountPatchRequest.getPassword()) : null
+        );
         accountPatchDTO.setEmail(accountPatchRequest.getEmail());
         accountPatchDTO.setFirstUsername(firstUsername);
+
+        String requestMessage;
+        try {
+            requestMessage = new ObjectMapper().writeValueAsString(accountPatchDTO);
+        } catch (JsonProcessingException e) {
+            log.error("Ошибка сериализации данных запроса для обновления аккаунта", e);
+            throw new RuntimeException("Ошибка сериализации данных запроса");
+        }
 
         HttpHeaders headers = new HttpHeaders();
         headers.set(HEADER_NAME, "Bearer " + jwtUtil.generateInterServiceJwt());
 
-        HttpEntity<AccountPatchDTO> requestEntity = new HttpEntity<>(accountPatchDTO, headers);
+        HttpEntity<String> requestEntity = new HttpEntity<>(requestMessage, headers);
 
         log.debug("Запрос к registry-service на обновление данных аккаунта пользователя");
-        try{
+        try {
             restTemplate.exchange(
                     url,
                     HttpMethod.PATCH,
                     requestEntity,
                     Void.class
             );
-        } catch (Exception e){
-            log.error("Ошибка обновления данных аккаунта: {}", e.getMessage());
-            throw new RuntimeException("Ошибка обновления данных аккаунта: " + e.getMessage());
+        } catch (Exception e) {
+            log.error("Ошибка при обновлении данных аккаунта: {}", e.getMessage(), e);
+            throw new RuntimeException("Ошибка обновления данных аккаунта: " + e.getMessage(), e);
         }
     }
+
 
     public void deleteAccount(String username) throws RuntimeException {
         String url = REGISTRY_SERVICE_URL + "/api/users/" + username;

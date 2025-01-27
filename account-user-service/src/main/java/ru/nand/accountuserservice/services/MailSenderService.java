@@ -1,4 +1,5 @@
-package ru.nand.notificationsservice.services;
+package ru.nand.accountuserservice.services;
+
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,7 +29,7 @@ public class MailSenderService {
         message.setText(text);
         message.setSubject(subject);
 
-        log.debug("Отправил сообщение: {} пользователю: {}", message, toEmail);
+        log.debug("Отправил сообщение: {}", message);
         mailSender.send(message);
     }
 }

@@ -1,12 +1,12 @@
 package ru.nand.registryservice.controllers;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import ru.nand.registryservice.entities.User;
 import ru.nand.registryservice.services.UserService;
-import ru.nand.registryservice.utils.JwtUtil;
 import ru.nand.registryservice.entities.DTO.AccountPatchDTO;
 
 import java.util.List;
@@ -79,16 +79,28 @@ public class AccountUserController {
     }
 
     @PatchMapping("/edit")
-    public ResponseEntity<String> patchUser(@RequestBody AccountPatchDTO accountPatchDTO) {
+    public ResponseEntity<String> patchUser(@RequestBody String message) {
         try {
             log.info("Запрос на обновление данных аккаунта");
+
+            // Десериализация входящего сообщения
+            AccountPatchDTO accountPatchDTO;
+            try {
+                accountPatchDTO = new ObjectMapper().readValue(message, AccountPatchDTO.class);
+            } catch (JsonProcessingException e) {
+                log.error("Ошибка десериализации данных: {}", e.getMessage());
+                return ResponseEntity.status(400).body("Некорректный формат данных");
+            }
+
+            // Обновление данных пользователя
             String newJwt = userService.updateUser(accountPatchDTO);
             return ResponseEntity.ok("Данные аккаунта успешно обновлены, новый JWT: " + newJwt);
         } catch (Exception e) {
             log.error("Ошибка обновления данных аккаунта: {}", e.getMessage());
-            return ResponseEntity.status(500).body("Ошибка обновления данных аккаунта");
+            return ResponseEntity.status(500).body("Ошибка обновления данных аккаунта: " + e.getMessage());
         }
     }
+
 
     @DeleteMapping("/{username}")
     public ResponseEntity<String> deleteUser(@PathVariable String username) {

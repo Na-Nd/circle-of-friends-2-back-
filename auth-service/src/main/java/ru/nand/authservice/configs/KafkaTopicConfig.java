@@ -29,4 +29,14 @@ public class KafkaTopicConfig {
                 .configs(Map.of("min.insync.replicas", "2"))
                 .build();
     }
+
+    // Топик для уведомлений
+    @Bean
+    public NewTopic userNotificationsTopic(){
+        return TopicBuilder.name("user-notifications-topic")
+                .partitions(3)
+                .replicas(3)
+                .configs(Map.of("min.insync.replicas", "2"))
+                .build();
+    }
 }

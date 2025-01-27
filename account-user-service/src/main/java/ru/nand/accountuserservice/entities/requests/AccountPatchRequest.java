@@ -17,4 +17,13 @@ public class AccountPatchRequest {
     private String email;
 
     private String password;
+
+    @Override
+    public String toString() {
+        return "AccountPatchRequest{" +
+                "username='" + username + '\'' +
+                ", email='" + email + '\'' +
+                ", password='" + password + '\'' +
+                '}';
+    }
 }

@@ -5,6 +5,7 @@ import io.jsonwebtoken.Jwts;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Component;
 import io.jsonwebtoken.security.Keys;
 
@@ -46,6 +47,11 @@ public class JwtUtil {
     // Извлечь роль
     public String extractRole(String token) {
         return extractClaim(token, claims -> claims.get("role", String.class));
+    }
+
+    // Извлечь почту
+    public String extractEmail(String token) {
+        return extractClaim(token, claims -> claims.get("email", String.class));
     }
 
     // Извлечь конкретные данные
@@ -123,6 +129,27 @@ public class JwtUtil {
                 .setIssuedAt(new Date(System.currentTimeMillis()))
                 .setExpiration(new Date(System.currentTimeMillis() + expiration))
                 .signWith(getInterServiceSigningKey())
+                .compact();
+    }
+
+    // Генерация пользовательского токена
+    public String generateToken(String username, String role, String email) {
+        Map<String, Object> claims = new HashMap<>();
+
+        //claims.put("role", user.getRole().name());
+        claims.put("role", role);
+        claims.put("email", email);
+        return createToken(claims, username);
+    }
+
+    // Создание пользовательского токена
+    private String createToken(Map<String, Object> claims, String subject) {
+        return Jwts.builder()
+                .setClaims(claims)
+                .setSubject(subject)
+                .setIssuedAt(new Date(System.currentTimeMillis()))
+                .setExpiration(new Date(System.currentTimeMillis() + expiration))
+                .signWith(getSigningKey())
                 .compact();
     }
 }

@@ -11,10 +11,7 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 import ru.nand.registryservice.entities.ROLE.ROLE;
 import java.time.LocalDateTime;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.*;
 
 @Entity
 @Getter
@@ -63,6 +60,9 @@ public class User implements UserDetails {
             inverseJoinColumns = @JoinColumn(name = "subscription_id")
     )
     private Set<User> subscriptions = new HashSet<>();
+
+    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<Notification> notifications = new ArrayList<>();
 
     public User(String username, String email, String password, ROLE role, Boolean isBlocked, LocalDateTime registrationDate) {
         this.username = username;

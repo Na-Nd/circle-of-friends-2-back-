@@ -10,8 +10,8 @@ import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 import ru.nand.registryservice.entities.User;
-import ru.nand.registryservice.repositories.MyUserRepository;
 import ru.nand.registryservice.entities.DTO.AccountPatchDTO;
+import ru.nand.registryservice.repositories.UserRepository;
 
 import java.security.Key;
 import java.util.Date;
@@ -22,7 +22,7 @@ import java.util.Map;
 @Slf4j
 @Service
 public class UserService implements UserDetailsService {
-    private final MyUserRepository userRepository;
+    private final UserRepository userRepository;
 
     @Value("${jwt.expiration}")
     private long expiration;
@@ -31,7 +31,7 @@ public class UserService implements UserDetailsService {
     private String secretKey;
 
     @Autowired
-    public UserService(MyUserRepository userRepository) {
+    public UserService(UserRepository userRepository) {
         this.userRepository = userRepository;
     }
 

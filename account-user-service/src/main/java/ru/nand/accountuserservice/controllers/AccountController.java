@@ -1,15 +1,23 @@
 package ru.nand.accountuserservice.controllers;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 import lombok.extern.slf4j.Slf4j;
+import ru.nand.accountuserservice.entities.DTO.NotificationDTO;
 import ru.nand.accountuserservice.entities.requests.AccountPatchRequest;
 import ru.nand.accountuserservice.services.AccountService;
+import ru.nand.accountuserservice.services.MailSenderService;
+import ru.nand.accountuserservice.utils.JwtUtil;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/account")
@@ -17,10 +25,20 @@ import java.util.List;
 public class AccountController {
 
     private final AccountService accountService;
+    private final MailSenderService mailSenderService;
+    private final KafkaTemplate<String, String> kafkaTemplate;
+    private final JwtUtil jwtUtil;
+
+    private final Map<String, String> emailVerificationCodes = new HashMap<>();
+    private final Map<String, Long> verificationTimestamps = new HashMap<>();
+    private final Map<String, AccountPatchRequest> pendingEdits = new HashMap<>();
 
     @Autowired
-    public AccountController(AccountService accountService) {
+    public AccountController(AccountService accountService, MailSenderService mailSenderService, KafkaTemplate<String, String> kafkaTemplate, JwtUtil jwtUtil) {
         this.accountService = accountService;
+        this.mailSenderService = mailSenderService;
+        this.kafkaTemplate = kafkaTemplate;
+        this.jwtUtil = jwtUtil;
     }
 
     @GetMapping
@@ -41,11 +59,11 @@ public class AccountController {
         }
     }
 
+    // Получить кол-во подписчиков конкретного пользователя
     @GetMapping("/user/{username}")
     public ResponseEntity<String> getUserByUsername(@PathVariable String username) {
         try{
             int followersCont = accountService.getFollowersCount(username);
-            log.info("Пользователь: {}. Количество подписчиков: {}", username, followersCont);
             return ResponseEntity.status(200).body("Пользователь: " + username + ", количество подписчиков: " + followersCont);
         } catch (Exception e){
             log.error(e.getMessage());
@@ -66,18 +84,115 @@ public class AccountController {
         }
 
     }
-
+    
     @PatchMapping("/edit")
-    public ResponseEntity<String> editAccount(@AuthenticationPrincipal UserDetails userDetails, @RequestBody AccountPatchRequest accountPatchRequest) {
+    public ResponseEntity<String> editAccount(
+            @AuthenticationPrincipal UserDetails userDetails, @RequestBody AccountPatchRequest accountPatchRequest) {
+        System.out.println("Реквест: " + accountPatchRequest.toString());
         try{
-            accountService.patchAccount(accountPatchRequest, userDetails.getUsername()); // Передаем username текущего пользователя (пригодится на случай если пользователь захочет поменять свой текущий username)
-            log.info("Обновление данных аккаунта пользователя {}", userDetails.getUsername());
-            return ResponseEntity.status(200).body("Аккаунт пользователя " + userDetails.getUsername() + " успешно обновлен");
+            String username = userDetails.getUsername();
+
+
+            // Если в реквесте новая почта, то отправим код верификации почты
+            if(accountPatchRequest.getEmail() != null){
+                log.info("В запросе на изменение аккаунта указана новая почта, отправим код верификации");
+                String verificationCode = String.valueOf((int) (Math.random() * 9000) + 1000);
+                emailVerificationCodes.put(username, verificationCode);
+                verificationTimestamps.put(username, System.currentTimeMillis());
+                pendingEdits.put(username, accountPatchRequest);
+
+                mailSenderService.sendMail(
+                        accountPatchRequest.getEmail(),
+                        "Подтверждение изменения почты",
+                        "Здравствуйте, " + username + ", ваш код для подтверждения почты: " + verificationCode
+                );
+
+                log.info("Отправлен код верификации на новую почту: {}", accountPatchRequest.getEmail());
+                return ResponseEntity.status(200).body("Код для подтверждения новой почты отправлен на: " + accountPatchRequest.getEmail() + ", проверьте почту");
+            }
+
+            // Если пользователь не обновлял почту
+            accountService.patchAccount(accountPatchRequest, username);
+            log.info("Запрос на обновление данных аккаунта пользователя {}", username);
+            return ResponseEntity.status(200).body("Аккаунт успешно обновлен");
         } catch (Exception e){
-            log.error(e.getMessage());
-            return ResponseEntity.status(500).body("Внутренняя ошибка сервера: Не удалось обновить данные аккаунта пользователя " + userDetails.getUsername() + ", ошибка: " + e.getMessage());
+            log.error("Ошибка при обновлении аккаунта: {}", e.getMessage());
+            return ResponseEntity.status(400).body("Ошибка при обновлении аккаунта: " + e.getMessage());
+        }
+    }
+
+    // Сюда редирект с editAccount(), попадаем только если в реквесте пользователь хочет изменить почту
+    @PostMapping("/verify-email")
+    public ResponseEntity<String> verifyEmail(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @RequestParam String code,
+            @RequestHeader("Authorization") String authorizationHeader){
+        String username = userDetails.getUsername();;
+        String savedCode = emailVerificationCodes.get(username);
+        Long timestamp = verificationTimestamps.get(username);
+        AccountPatchRequest pendingRequest = pendingEdits.get(username);
+
+        if (savedCode == null || timestamp == null || pendingRequest == null) {
+            return ResponseEntity.status(400).body("Код подтверждения истек или неверен");
         }
 
+        // Срок жизни кода верификации
+        if(System.currentTimeMillis() - timestamp > 5 * 60 * 1000){
+            emailVerificationCodes.remove(username);
+            verificationTimestamps.remove(username);
+            pendingEdits.remove(username);
+
+            return ResponseEntity.status(400).body("Код подтверждения истек");
+        }
+
+        // Правильность кода
+        if(!savedCode.equals(code)){
+            return ResponseEntity.status(400).body("Неверный код подтверждения");
+        }
+
+        // Чистим мапы после успешной верификации
+        emailVerificationCodes.remove(username);
+        verificationTimestamps.remove(username);
+
+        // Таким костылем достаем старую почту из токена текущего пользователя
+        String token = authorizationHeader.startsWith("Bearer ") ? authorizationHeader.substring(7) : authorizationHeader;
+        String email = jwtUtil.extractEmail(token);
+
+        // Создаем уведомление и отправляем на старую почту
+        NotificationDTO notificationDTO = new NotificationDTO(email, username + ", ваша почта была изменена на: " + pendingRequest.getEmail());
+        String notificationMessage;
+        try{
+            notificationMessage = new ObjectMapper().writeValueAsString(notificationDTO);
+        } catch (JsonProcessingException e) {
+            log.error("Ошибка сериализации уведомления: {}", e.getMessage());
+            return ResponseEntity.status(500).body("Внутренняя ошибка сервера");
+        }
+        kafkaTemplate.send("user-notifications-topic", notificationMessage);
+
+        // Создаем уведомление и отправляем на новую почту
+        notificationDTO.setUserEmail(pendingRequest.getEmail());
+        notificationDTO.setMessage(username + ", данные вашего аккаунта были изменены");
+
+
+        try{
+            accountService.patchAccount(pendingRequest, username);
+            pendingEdits.remove(username);
+            log.info("Почта пользователя {} была успешно подтверждена и данные аккаунта обновлены", username);
+
+            String newToken;
+            // Если пользователь сменил username
+            if(pendingRequest.getUsername() != null){
+                newToken = jwtUtil.generateToken(pendingRequest.getUsername(), jwtUtil.extractRole(token), pendingRequest.getEmail());
+            } else{
+                // В противном случае создаем токен на основе старого username, который достаем из токена текущего пользователя
+                newToken = jwtUtil.generateToken(jwtUtil.extractUsername(token), jwtUtil.extractRole(token), pendingRequest.getEmail());
+            }
+
+            return ResponseEntity.status(200).body(username + ", данные вашего аккаунта успешно обновлены, JWT: " + newToken);
+        } catch (Exception e){
+            log.error("Ошибка обновления аккаунта пользователя {} после подтверждения почты: {}", username, e.getMessage());
+            return ResponseEntity.status(500).body("Ошибка при обновлении данных аккаунта");
+        }
     }
 
     @DeleteMapping("/delete")

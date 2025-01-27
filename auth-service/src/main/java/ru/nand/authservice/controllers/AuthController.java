@@ -4,11 +4,13 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.ResponseEntity;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 import ru.nand.authservice.entities.DTO.LoginDTO;
+import ru.nand.authservice.entities.DTO.NotificationDTO;
 import ru.nand.authservice.entities.DTO.RegisterDTO;
 import ru.nand.authservice.services.KafkaJwtListener;
 import ru.nand.authservice.services.MailSenderService;
@@ -40,7 +42,7 @@ public class AuthController {
         emailVerificationCodes.put(userDTO.getEmail(), verificationCode);
         verificationTimestamps.put(userDTO.getEmail(), System.currentTimeMillis());
 
-        // Сохраняем данные пользователя
+        // Сохраняем данные пользователя в мапу по ключу его почты
         pendingRegistrations.put(userDTO.getEmail(), userDTO);
 
         mailSenderService.sendMail(
@@ -53,25 +55,32 @@ public class AuthController {
         return Mono.just("Код верификации отправлен. Проверьте свою почту.");
     }
 
+    // Сюда должен быть редирект после registerUser()
     @PostMapping("/verify-email")
-    public Mono<Object> verifyAndRegisterUser(@RequestParam String email, @RequestParam String code) throws JsonProcessingException {
+    public Mono<Object> verifyAndRegisterUser(@RequestParam String email, @RequestParam String code){
         String savedCode = emailVerificationCodes.get(email);
         Long timestamp = verificationTimestamps.get(email);
         RegisterDTO userDTO = pendingRegistrations.get(email);
 
         if (savedCode == null || timestamp == null || userDTO == null) {
-            return Mono.just("Код верификации истек или неверен. Попробуйте зарегистрироватся снова.");
+            //return Mono.just("Код верификации истек или неверен. Попробуйте зарегистрироватся снова.");
+            return Mono.just(ResponseEntity.status(400)
+                    .body("Код верификации истек или неверен. Попробуйте зарегистрироватся снова."));
         }
 
         if (System.currentTimeMillis() - timestamp > 5 * 60 * 1000) { // 5 минут
             emailVerificationCodes.remove(email);
             verificationTimestamps.remove(email);
             pendingRegistrations.remove(email);
-            return Mono.just("Код верификации истек. Попробуйте зарегистриороваться снова.");
+            //return Mono.just("Код верификации истек. Попробуйте зарегистриороваться снова.");
+            return Mono.just(ResponseEntity.status(400)
+                    .body("Код верификации истек. Попробуйте зарегистрироваться снова."));
         }
 
         if (!savedCode.equals(code)) {
-            return Mono.just("Неверный код верификации.");
+            //return Mono.just("Неверный код верификации.");
+            return Mono.just(ResponseEntity.status(400)
+                    .body("Неверный код верификации."));
         }
 
         emailVerificationCodes.remove(email);
@@ -84,16 +93,40 @@ public class AuthController {
         String requestId = UUID.randomUUID().toString();
         userDTO.setRequestId(requestId);
 
-        log.debug("Отправка сообщения регистрации в топик user-registration-topic: {}", userDTO);
+        log.info("Отправка сообщения регистрации в топик user-registration-topic: {}", userDTO);
 
-        ObjectMapper objectMapper = new ObjectMapper();
-        String message = objectMapper.writeValueAsString(userDTO);
+        // Сериализация данных регистрирующегося пользователя
+        String registrationMessage;
+        try{
+            registrationMessage = new ObjectMapper().writeValueAsString(userDTO);
+        } catch (JsonProcessingException e) {
+            log.error("Ошибка сериализации данных при регистрации пользователя {}: {}", userDTO.getUsername(), e.getMessage());
+            //return Mono.just("Внутренняя ошибка сервера");
+            return Mono.just(ResponseEntity.status(500)
+                    .body("Внутренняя ошибка сервера"));
+        }
+
+        log.info("Отправка уведомления для пользователя {}", userDTO.getEmail());
+
+        NotificationDTO notificationDTO = new NotificationDTO(userDTO.getEmail(), userDTO.getUsername() + ", ваш аккаунт успешно зарегистрирован");
+        String notificationMessage;
+        // Сериализация уведомления
+        try {
+            notificationMessage = new ObjectMapper().writeValueAsString(notificationDTO);
+        } catch (JsonProcessingException e){
+            log.error("Ошибка сериализации уведомления: {}", e.getMessage());
+            //return Mono.just("Внутренняя ошибка сервера");
+            return Mono.just(ResponseEntity.status(500)
+                    .body("Внутренняя ошибка сервера"));
+        }
+
+        kafkaTemplate.send("user-notifications-topic", notificationMessage);
 
         // Сброс токена для нового запроса
         kafkaJwtListener.resetToken(requestId);
 
         // Отправим сообщение в брокер и ждем ответа с JWT
-        return Mono.fromFuture(() -> kafkaTemplate.send("user-registration-topic", message))
+        return Mono.fromFuture(() -> kafkaTemplate.send("user-registration-topic", registrationMessage))
                 .flatMap(result -> waitForResponse(requestId)) // Ждём ответа с JWT
                 .timeout(Duration.ofSeconds(15), Mono.just("Ошибка: ответ от Kafka не получен вовремя"))
                 .doOnSuccess(aVoid -> log.info("Регистрация пользователя завершена"));
@@ -101,7 +134,7 @@ public class AuthController {
 
 
     @PostMapping("/login")
-    public Mono<Object> loginUser(@RequestBody LoginDTO loginDTO) throws JsonProcessingException {
+    public Mono<Object> loginUser(@RequestBody LoginDTO loginDTO){
         loginDTO.setPassword(EncryptionUtil.encrypt(loginDTO.getPassword()));
 
         String requestId = UUID.randomUUID().toString(); // Генерируем уникальный идентификатор запроса
@@ -109,17 +142,25 @@ public class AuthController {
 
         log.info("Отправка сообщения логина в топик user-login-topic: {}", loginDTO);
 
-        ObjectMapper objectMapper = new ObjectMapper();
-
-        // TODO мб try-catch
-        String message = objectMapper.writeValueAsString(loginDTO);
+        // Сериализация данных при логине пользователя
+        String loginMessage;
+        try{
+            loginMessage = new ObjectMapper().writeValueAsString(loginDTO);
+        } catch (JsonProcessingException e){
+            log.error("Ошибка сериализации данных пользователя {} при логине: {}", loginDTO.getUsername(), e.getMessage());
+            //return Mono.just("Внутренняя ошибка сервера");
+            return Mono.just(ResponseEntity.status(500)
+                    .body("Внутренняя ошибка сервера"));
+        }
         // Сброс
         kafkaJwtListener.resetToken(requestId);
 
-        return Mono.fromFuture(() -> kafkaTemplate.send("user-login-topic", message))
-                .flatMap(result -> waitForResponse(requestId)) // Передаём только requestId
-                .timeout(Duration.ofSeconds(15), Mono.just("Ошибка: ответ от Kafka не получен вовремя"))
-                .doOnSuccess(aVoid -> log.info("Логин пользователя завершён"));
+        return Mono.fromFuture(() -> kafkaTemplate.send("user-login-topic", loginMessage))
+                .flatMap(result -> waitForResponse(requestId))
+                .timeout(Duration.ofSeconds(15), Mono.just(ResponseEntity.status(408)
+                        .body("Ошибка: ответ от Kafka не получен вовремя")))
+                .doOnSuccess(aVoid -> log.info("Логин пользователя завершён"))
+                .map(ResponseEntity::ok);
     }
 
     private Mono<Object> waitForResponse(String requestId) {
