@@ -9,9 +9,11 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
+import ru.nand.notificationsservice.entities.DTO.NotificationDTO;
 import ru.nand.notificationsservice.entities.Notification;
 import ru.nand.notificationsservice.utils.JwtUtil;
 
+import java.util.Arrays;
 import java.util.List;
 
 @Slf4j
@@ -34,7 +36,7 @@ public class NotificationService {
     }
 
 
-    public List<Notification> getAllNotificationsForCurrentUser(String username) throws RuntimeException{
+    public List<NotificationDTO> getAllNotificationsForCurrentUser(String username) {
         String url = REGISTRY_SERVICE_URL + "/api/notifications?username=" + username;
 
         HttpHeaders headers = new HttpHeaders();
@@ -42,16 +44,7 @@ public class NotificationService {
 
         HttpEntity<Void> entity = new HttpEntity<>(headers);
 
-        try{
-            ResponseEntity<Notification[]> response = restTemplate.exchange(
-                    url,
-                    HttpMethod.GET,
-                    entity,
-                    Notification[].class
-            );
-            return List.of(response.getBody());
-        } catch (Exception e) {
-            throw new RuntimeException(e); // Передадим исключение и поймаем в контроллере
-        }
+        ResponseEntity<NotificationDTO[]> response = restTemplate.exchange(url, HttpMethod.GET, entity, NotificationDTO[].class);
+        return Arrays.asList(response.getBody());
     }
 }

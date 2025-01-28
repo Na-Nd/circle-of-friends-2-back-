@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import ru.nand.notificationsservice.entities.DTO.NotificationDTO;
 import ru.nand.notificationsservice.entities.Notification;
 import ru.nand.notificationsservice.services.NotificationService;
 import ru.nand.notificationsservice.utils.JwtUtil;
@@ -29,17 +30,15 @@ public class NotificationsController {
         this.notificationService = notificationService;
     }
 
-    // Получить уведомления конкретного пользователя
-    @GetMapping()
-    public ResponseEntity<?> getAllNotifications(@AuthenticationPrincipal UserDetails userDetails){
-        try{
-            // Получение списка уведомлений
-            List<Notification> userNotifications = notificationService.getAllNotificationsForCurrentUser(userDetails.getUsername());
-            return ResponseEntity.status(200).body(userNotifications);
-        } catch (Exception e){
-            log.error("Ошибка при получении списка уведомлений для пользователя {}: {}", userDetails.getUsername(), e.getMessage());
+    // Получить уведомления текущего пользователя
+    @GetMapping
+    public ResponseEntity<?> getAllNotifications(@AuthenticationPrincipal UserDetails userDetails) {
+        try {
+            List<NotificationDTO> userNotifications = notificationService.getAllNotificationsForCurrentUser(userDetails.getUsername());
+            return ResponseEntity.ok(userNotifications);
+        } catch (Exception e) {
+            log.error("Ошибка при получении списка уведомлений для пользователя {}: {}", userDetails.getUsername(), e.getMessage(), e);
             return ResponseEntity.status(500).body("Внутренняя ошибка сервера");
         }
-
     }
 }
