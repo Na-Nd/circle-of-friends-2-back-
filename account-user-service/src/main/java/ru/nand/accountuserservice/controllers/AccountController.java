@@ -88,12 +88,10 @@ public class AccountController {
     @PatchMapping("/edit")
     public ResponseEntity<String> editAccount(
             @AuthenticationPrincipal UserDetails userDetails, @RequestBody AccountPatchRequest accountPatchRequest) {
-        System.out.println("Реквест: " + accountPatchRequest.toString());
         try{
             String username = userDetails.getUsername();
 
-
-            // Если в реквесте новая почта, то отправим код верификации почты
+            // Если в запросе новая почта, то отправим код верификации почты
             if(accountPatchRequest.getEmail() != null){
                 log.info("В запросе на изменение аккаунта указана новая почта, отправим код верификации");
                 String verificationCode = String.valueOf((int) (Math.random() * 9000) + 1000);
@@ -159,26 +157,40 @@ public class AccountController {
         String email = jwtUtil.extractEmail(token);
 
         // Создаем уведомление и отправляем на старую почту
-        NotificationDTO notificationDTO = new NotificationDTO(email, username + ", ваша почта была изменена на: " + pendingRequest.getEmail());
-        String notificationMessage;
+        NotificationDTO notificationDTO = new NotificationDTO();
+        notificationDTO.setUserEmail(email);
+        notificationDTO.setMessage(username + ", ваша почта была изменена на: " + pendingRequest.getEmail());
+        String oldEmailNotificationMessage;
         try{
-            notificationMessage = new ObjectMapper().writeValueAsString(notificationDTO);
+            oldEmailNotificationMessage = new ObjectMapper().writeValueAsString(notificationDTO);
         } catch (JsonProcessingException e) {
-            log.error("Ошибка сериализации уведомления: {}", e.getMessage());
+            log.error("Ошибка сериализации уведомления для старой почты: {}", e.getMessage());
             return ResponseEntity.status(500).body("Внутренняя ошибка сервера");
         }
-        kafkaTemplate.send("user-notifications-topic", notificationMessage);
+        //kafkaTemplate.send("user-notifications-topic", oldEmailNotificationMessage);
 
-        // Создаем уведомление и отправляем на новую почту
+        // Перезаписываем уведомление и отправляем на новую почту
         notificationDTO.setUserEmail(pendingRequest.getEmail());
         notificationDTO.setMessage(username + ", данные вашего аккаунта были изменены");
-
+        String newEmailNotificationMessage;
+        try{
+            newEmailNotificationMessage = new ObjectMapper().writeValueAsString(notificationDTO);
+        } catch (JsonProcessingException e) {
+            log.error("Ошибка сериализации уведомления для новой почты: {}", e.getMessage());
+            return ResponseEntity.status(500).body("Внутренняя ошибка сервера");
+        }
+        // kafkaTemplate.send("user-notifications-topic", newEmailNotificationMessage);
 
         try{
             accountService.patchAccount(pendingRequest, username);
             pendingEdits.remove(username);
             log.info("Почта пользователя {} была успешно подтверждена и данные аккаунта обновлены", username);
 
+            // Отправляем уведомления
+            kafkaTemplate.send("user-notifications-topic", oldEmailNotificationMessage);
+            kafkaTemplate.send("user-notifications-topic", newEmailNotificationMessage);
+
+            // Генерируем токен на основе новых данных
             String newToken;
             // Если пользователь сменил username
             if(pendingRequest.getUsername() != null){

@@ -32,13 +32,18 @@ public class KafkaUserNotificationsListener {
         NotificationDTO notificationDTO = mapper.readValue(message, NotificationDTO.class);
         log.info("Получено уведомление для пользователя: {}", notificationDTO.getUserEmail());
 
+        // Если пользователь не нашелся значит это его старая почта и сохранять такое уведомление не нужно
+        // А если пользователь нашелся значит это новая почта и можно сохранить
         User user = userService.findByEmail(notificationDTO.getUserEmail());
+        if(user != null) {
+            // TODO modelMapper
+            Notification notification = new Notification();
+            notification.setUser(user);
+            notification.setText(notificationDTO.getMessage());
+            notification.setCreationDate(LocalDateTime.now());
 
-        Notification notification = new Notification();
-        notification.setUser(user);
-        notification.setText(notificationDTO.getMessage());
-        notification.setCreationDate(LocalDateTime.now());
+            notificationService.save(notification);
+        }
 
-        notificationService.save(notification);
     }
 }
