@@ -216,4 +216,27 @@ public class AccountService {
         }
     }
 
+    public void unfollowUser(String currentUsername, String targetUsername){
+        String url = REGISTRY_SERVICE_URL + "/api/users/" + currentUsername + "/unfollow/" + targetUsername;
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.set(HEADER_NAME, "Bearer " + jwtUtil.generateInterServiceJwt());
+
+        HttpEntity<Void> requestEntity = new HttpEntity<>(headers);
+
+        log.debug("Запрос к registry-service на отписку пользователя {} от {}", currentUsername, targetUsername);
+
+        try{
+            restTemplate.exchange(
+                    url,
+                    HttpMethod.DELETE,
+                    requestEntity,
+                    Void.class
+            );
+        } catch (Exception e){
+            log.error("Ошибка при отписке пользователя {} от {}: {}", currentUsername, targetUsername, e.getMessage());
+            throw new RuntimeException("Ошибка отписки от пользователя: " + e.getMessage());
+        }
+    }
+
 }

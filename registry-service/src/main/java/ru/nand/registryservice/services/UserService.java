@@ -2,6 +2,7 @@ package ru.nand.registryservice.services;
 
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
+import jakarta.transaction.Transactional;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -14,6 +15,7 @@ import ru.nand.registryservice.entities.DTO.AccountPatchDTO;
 import ru.nand.registryservice.repositories.UserRepository;
 
 import java.security.Key;
+import java.security.PublicKey;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
@@ -105,13 +107,35 @@ public class UserService implements UserDetailsService {
         log.debug("Пользователь {} подписался на {}", currentUsername, targetUsername);
     }
 
+    @Transactional
+    public void unfollowUser(String currentUsername, String targetUsername){
+        User currentUser = userRepository.findByUsername(currentUsername);
+        User targetUser = userRepository.findByUsername(targetUsername);
+
+        if(targetUser == null){
+            throw new RuntimeException("Целевой пользователь не найден");
+        }
+
+        if (!currentUser.getSubscriptions().contains(targetUser)) {
+            throw new RuntimeException("Пользователь не подписан");
+        }
+
+        currentUser.getSubscriptions().remove(targetUser);
+        targetUser.getSubscribers().remove(currentUser);
+
+        userRepository.save(currentUser);
+        userRepository.save(targetUser);
+
+        log.debug("Пользователь {} отписался от {}", currentUsername, targetUsername);
+    }
+
     public List<String> getAllUsernames() {
         return userRepository.findAll().stream()
                 .map(User::getUsername)
                 .toList();
     }
 
-    // Обновляет данные пользователя
+    // Обновляем данные пользователя
     public String updateUser(AccountPatchDTO accountPatchDTO) throws RuntimeException {
         User user = userRepository.findByUsername(accountPatchDTO.getFirstUsername());
         if (user == null) {
@@ -136,7 +160,7 @@ public class UserService implements UserDetailsService {
             user.setPassword(accountPatchDTO.getPassword());
         }
 
-        // TODO без jwtUtil чтобы не было цикличной зависимости
+        // без jwtUtil чтобы не было цикличной зависимости, так как в jwtUtil используется UserService
         String newJwt = generateToken(user);
 
         userRepository.save(user);
@@ -152,7 +176,7 @@ public class UserService implements UserDetailsService {
 
 
 
-
+    // Чтобы избежать цикла
     public String generateToken(UserDetails userDetails) {
         Map<String, Object> claims = new HashMap<>();
         User user = userRepository.findByUsername(userDetails.getUsername());

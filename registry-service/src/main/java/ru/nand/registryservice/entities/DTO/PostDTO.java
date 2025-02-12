@@ -14,6 +14,8 @@ public class PostDTO {
     private String author;
     private String filename;
     private String imageBase64;
+    private int likesCount;
+    private int commentsCount;
 
     @Override
     public String toString() {
@@ -22,6 +24,9 @@ public class PostDTO {
                 ", tags=" + tags +
                 ", author='" + author + '\'' +
                 ", filename='" + filename + '\'' +
+                ", imageBase64='" + imageBase64 + '\'' +
+                ", likesCount=" + likesCount +
+                ", commentsCount=" + commentsCount +
                 '}';
     }
 }

@@ -45,7 +45,7 @@ public class PostsController {
         }
     }
 
-    // Получить все посты
+    /// Получить все посты
     @GetMapping
     public ResponseEntity<?> getAllPosts(){
         try{
@@ -56,6 +56,7 @@ public class PostsController {
         }
     }
 
+    /// Получить конкретный пост
     @GetMapping("/id/{postId}")
     public ResponseEntity<?> getPostById(@PathVariable int postId) {
         try{

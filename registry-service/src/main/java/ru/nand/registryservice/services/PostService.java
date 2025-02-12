@@ -39,7 +39,6 @@ public class PostService {
     public void createPost(PostDTO postDTO) {
         User author = userRepository.findByUsername(postDTO.getAuthor());
 
-        //TODO modelmapper
         Post post = new Post();
         post.setText(postDTO.getText());
         post.setTags(postDTO.getTags());
@@ -58,26 +57,21 @@ public class PostService {
                     author.getUsername(),
                     "Посмотрите новый пост от " + author.getUsername()
             );
-            // Можно было бы сохранять уведомление сразу, но придется перепилить текущую реализацию отправки и сохранения уведомлений или сделать новую
-            // Или отправить уведомление из микросервиса постов, но так получилось бы медленнее
         }
     }
 
-    public PostDTO getPostById(int id) throws RuntimeException{
-        Optional<Post> optionalPost = postRepository.findById(id);
-
-        if(optionalPost.isEmpty()){
-            throw new RuntimeException("Пост не найден");
-        }
-
-        Post post = optionalPost.get();
+    public PostDTO getPostById(int id) throws RuntimeException {
+        Post post = postRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Пост не найден"));
 
         return new PostDTO(
                 post.getText(),
                 post.getTags(),
                 post.getAuthor().getUsername(),
                 post.getFilename(),
-                null
+                null,  // Base64 пока не используется
+                post.getLikes().size(),
+                post.getComments().size()
         );
     }
 
@@ -88,7 +82,9 @@ public class PostService {
                         post.getTags(),
                         post.getAuthor().getUsername(),
                         post.getFilename(),
-                        null
+                        null,  // Base64 пока не используется
+                        post.getLikes().size(),
+                        post.getComments().size()
                 ))
                 .collect(Collectors.toList());
     }
@@ -96,12 +92,14 @@ public class PostService {
     public List<PostDTO> getPostsByAuthor(String author) {
         List<Post> posts = postRepository.findByAuthor(userRepository.findByUsername(author));
         return posts.stream()
-                .map(post -> new PostDTO( // тоже modelmapper'ом можно
+                .map(post -> new PostDTO(
                         post.getText(),
                         post.getTags(),
                         post.getAuthor().getUsername(),
                         post.getFilename(),
-                        null
+                        null,  // Base64 пока не используется
+                        post.getLikes().size(),
+                        post.getComments().size()
                 ))
                 .collect(Collectors.toList());
     }
@@ -110,7 +108,6 @@ public class PostService {
     public void updatePost(int postId, PostDTO postDTO) throws RuntimeException{
         Post existingPost = postRepository.findById(postId).orElseThrow(() -> new RuntimeException("Пост не найден"));
 
-        // Обновляем только переданные данные
         if(postDTO.getText() != null){
             existingPost.setText(postDTO.getText());
         }
@@ -131,8 +128,11 @@ public class PostService {
                         post.getTags(),
                         post.getAuthor().getUsername(),
                         post.getFilename(),
-                        null)
-                ).collect(Collectors.toList());
+                        null,  // Base64 пока не используется
+                        post.getLikes().size(),
+                        post.getComments().size()
+                ))
+                .collect(Collectors.toList());
     }
 
     @Transactional
@@ -147,14 +147,15 @@ public class PostService {
                         post.getTags(),
                         post.getAuthor().getUsername(),
                         post.getFilename(),
-                        null)
-                ).collect(Collectors.toList());
+                        null,  // Base64 пока не используется
+                        post.getLikes().size(),
+                        post.getComments().size()
+                ))
+                .collect(Collectors.toList());
     }
-
 
     public List<PostDTO> getSubscriptionPosts(String username){
         User user = userRepository.findByUsername(username);
-
         Set<User> subscriptions = user.getSubscriptions();
 
         return postRepository.findByAuthorIn(subscriptions).stream()
@@ -163,11 +164,13 @@ public class PostService {
                         post.getTags(),
                         post.getAuthor().getUsername(),
                         post.getFilename(),
-                        null)
-                ).collect(Collectors.toList());
+                        null,  // Base64 пока не используется
+                        post.getLikes().size(),
+                        post.getComments().size()
+                ))
+                .collect(Collectors.toList());
     }
 
-    // TODO Util
     private void sendNotification(String targetUserEmail, String authorUsername, String notificationMessage){
         NotificationDTO notificationDTO = new NotificationDTO();
         notificationDTO.setUserEmail(targetUserEmail);
@@ -186,8 +189,6 @@ public class PostService {
     public void likePost(int postId, String username){
         Post post = postRepository.findById(postId).orElseThrow(() -> new RuntimeException("Пост не найден"));
         User user = userRepository.findByUsername(username);
-
-        log.debug("Получен пост с id {} и пользователь с id {}", post.getId(), user.getId());
 
         post.getLikes().add(user);
         postRepository.save(post);
@@ -221,7 +222,6 @@ public class PostService {
             throw new RuntimeException("Пользователь не найден");
         }
 
-        // TODO modelMapper
         Comment comment = new Comment();
         comment.setPost(post);
         comment.setAuthor(user);
@@ -236,11 +236,10 @@ public class PostService {
         Comment comment = commentRepository.findById(commentId).orElseThrow(() -> new RuntimeException("Комментарий не найден"));
 
         if(!comment.getAuthor().getUsername().equals(commentDTO.getUsername())){
-            throw new RuntimeException("Доступ к редактированию чужого поста запрещен");
+            throw new RuntimeException("Доступ к редактированию чужого комментария запрещен");
         }
 
         comment.setText(commentDTO.getText());
-
         commentRepository.save(comment);
     }
 
@@ -249,7 +248,7 @@ public class PostService {
         Comment comment = commentRepository.findById(commentId).orElseThrow(() -> new RuntimeException("Комментарий не найден"));
 
         if(!comment.getAuthor().getUsername().equals(username)){
-            throw new RuntimeException("Доступ к удалению чужого поста запрещен");
+            throw new RuntimeException("Доступ к удалению чужого комментария запрещен");
         }
 
         commentRepository.delete(comment);
@@ -264,5 +263,4 @@ public class PostService {
                         comment.getText())
                 ).collect(Collectors.toList());
     }
-
 }

@@ -216,7 +216,7 @@ public class AccountController {
             return ResponseEntity.status(200).body("Аккаунт пользователя " + userDetails.getUsername() + " удален");
         } catch (Exception e){
             log.error(e.getMessage());
-            return ResponseEntity.status(500).body("Внутренняя ошибка сервера: " + e.getMessage());
+            return ResponseEntity.status(500).body("Ошибка удаления аккаунта");
         }
     }
 
@@ -228,7 +228,7 @@ public class AccountController {
             return ResponseEntity.status(200).body(followers);
         } catch (Exception e){
             log.error(e.getMessage());
-            return ResponseEntity.status(500).body("Внутренняя ошибка сервера: " + e.getMessage());
+            return ResponseEntity.status(500).body("Ошибка получения списка подписчиков пользователя");
         }
     }
 
@@ -240,7 +240,7 @@ public class AccountController {
             return ResponseEntity.status(200).body(following);
         } catch (Exception e){
             log.error(e.getMessage());
-            return ResponseEntity.status(500).body("Внутренняя ошибка сервера: " + e.getMessage());
+            return ResponseEntity.status(500).body("Ошибка получения списка подписок пользователя");
         }
     }
 
@@ -252,10 +252,22 @@ public class AccountController {
             return ResponseEntity.status(200).body("Теперь вы подписаны на пользователя " + targetUsername);
         } catch (Exception e){
             log.error(e.getMessage());
-            return ResponseEntity.status(500).body("Внутренняя ошибка сервера: " + e.getMessage());
+            return ResponseEntity.status(500).body("Ошибка подписки на пользователя");
         }
     }
 
     // TODO Отписка
-    
+    @DeleteMapping("/follow/{targetUsername}")
+    public ResponseEntity<String> unfollowUser(@PathVariable String targetUsername, @AuthenticationPrincipal UserDetails userDetails) {
+        try{
+            accountService.unfollowUser(userDetails.getUsername(), targetUsername);
+            log.info("Запрос пользователя {} на отписку от {}", userDetails.getUsername(), targetUsername);
+
+            return ResponseEntity.status(200).body("Вы отписались от пользователя " + targetUsername);
+        } catch (Exception e){
+            log.error("Ошибка при отписке: {}", e.getMessage());
+            return ResponseEntity.status(500).body("Ошибка отписки от пользователя");
+        }
+    }
+
 }

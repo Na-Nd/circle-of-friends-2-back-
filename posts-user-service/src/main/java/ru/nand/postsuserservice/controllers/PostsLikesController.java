@@ -38,6 +38,7 @@ public class PostsLikesController {
     }
 
     /// Удаление лайка с поста
+    @DeleteMapping("/{postId}/like")
     public ResponseEntity<String> unlikePost(
             @PathVariable int postId,
             @AuthenticationPrincipal UserDetails userDetails

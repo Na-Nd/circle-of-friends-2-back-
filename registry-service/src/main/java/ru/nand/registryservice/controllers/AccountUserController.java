@@ -67,6 +67,19 @@ public class AccountUserController {
         }
     }
 
+    @DeleteMapping("/{currentUsername}/follow/{targetUsername}")
+    public ResponseEntity<String> unfollowUser(@PathVariable String currentUsername, @PathVariable String targetUsername){
+        try{
+            log.info("Запрос на отписку пользователя {} от {}", currentUsername, targetUsername);
+            userService.unfollowUser(currentUsername, targetUsername);
+
+            return ResponseEntity.status(200).body("Вы успешно отписались от " + targetUsername);
+        } catch (Exception e){
+            log.error("Ошибка отписки пользователя {} от {}: {}", currentUsername, targetUsername, e.getMessage());
+            return ResponseEntity.status(500).body("Ошибка отписки: " + e.getMessage());
+        }
+    }
+
     @GetMapping
     public ResponseEntity<List<String>> getAllUsernames() {
         try {
@@ -113,4 +126,6 @@ public class AccountUserController {
             return ResponseEntity.status(500).body("Ошибка удаления аккаунта: " + e.getMessage());
         }
     }
+
+
 }
