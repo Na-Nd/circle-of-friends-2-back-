@@ -119,6 +119,7 @@ public class AccountController {
         }
     }
 
+    // TODO service & util
     // Сюда редирект с editAccount(), попадаем только если в реквесте пользователь хочет изменить почту
     @PostMapping("/verify-email")
     public ResponseEntity<String> verifyEmail(
@@ -254,4 +255,7 @@ public class AccountController {
             return ResponseEntity.status(500).body("Внутренняя ошибка сервера: " + e.getMessage());
         }
     }
+
+    // TODO Отписка
+    
 }

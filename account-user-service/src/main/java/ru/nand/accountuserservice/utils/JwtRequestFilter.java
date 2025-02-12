@@ -12,7 +12,6 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
-import ru.nand.accountuserservice.services.TokenRefreshClient;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -54,7 +53,7 @@ public class JwtRequestFilter extends OncePerRequestFilter {
                         log.warn("Не удалось обновить токен");
                     }
                 }
-
+                // Валидация токена и добавление текущего пользователя в КБ
                 if (jwtUtil.validateToken(token)) {
                     String username = jwtUtil.extractUsername(token);
                     String role = jwtUtil.extractRole(token);

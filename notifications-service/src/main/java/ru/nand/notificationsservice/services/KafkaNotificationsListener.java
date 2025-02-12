@@ -30,7 +30,7 @@ public class KafkaNotificationsListener {
 
         log.info("Отправка уведомления на почту {}", notificationDTO.getUserEmail());
 
-        mailSenderService.sendMail(notificationDTO.getUserEmail(), "Регистрация аккаунта", notificationDTO.getMessage());
+        mailSenderService.sendMail(notificationDTO.getUserEmail(), "Уведомление от COF-2", notificationDTO.getMessage());
 
         // Теперь передаем уведомление в registry-service для сохранения
         kafkaTemplate.send("notifications-registry-topic", message);

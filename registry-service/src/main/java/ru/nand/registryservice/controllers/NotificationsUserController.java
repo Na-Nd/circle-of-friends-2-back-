@@ -8,7 +8,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import ru.nand.registryservice.entities.DTO.NotificationDTO;
-import ru.nand.registryservice.entities.Notification;
 import ru.nand.registryservice.services.NotificationService;
 
 import java.util.List;
@@ -28,7 +27,6 @@ public class NotificationsUserController {
     public ResponseEntity<List<NotificationDTO>> getNotificationsForUser(@RequestParam String username) {
         try {
             List<NotificationDTO> notifications = notificationService.getNotificationsByUsername(username);
-            System.out.println(notifications.getFirst().toString());// Как выглядит //TODO deleteme
             return ResponseEntity.status(200).body(notifications);
         } catch (Exception e) {
             log.error("Ошибка при получении уведомлений для пользователя {}: {}", username, e.getMessage(), e);

@@ -28,10 +28,15 @@ public class KafkaUserAuthListener {
     private final PasswordEncoder passwordEncoder;
 
     @KafkaListener(topics = "user-registration-topic", groupId = "registry-group")
-    public void handleRegistration(String message) throws JsonProcessingException {
-        ObjectMapper objectMapper = new ObjectMapper();
-        //TODO мб тоже try-catch
-        RegisterDTO registerDTO = objectMapper.readValue(message, RegisterDTO.class);
+    public void handleRegistration(String message) {
+
+        RegisterDTO registerDTO;
+        try{
+            registerDTO = new ObjectMapper().readValue(message, RegisterDTO.class);
+        } catch (JsonProcessingException e) {
+            log.error("Ошибка десериализации сообщения регистрации: {}", e.getMessage());
+            return;
+        }
 
         log.info("Получено сообщение о регистрации: {}", registerDTO);
 
@@ -63,10 +68,16 @@ public class KafkaUserAuthListener {
     }
 
     @KafkaListener(topics = "user-login-topic", groupId = "registry-group")
-    public void handleLogin(String message) throws JsonProcessingException {
-        ObjectMapper objectMapper = new ObjectMapper();
-        //TODO мб тоже try-catch
-        LoginDTO loginDTO = objectMapper.readValue(message, LoginDTO.class);
+    public void handleLogin(String message) {
+
+        //LoginDTO loginDTO = objectMapper.readValue(message, LoginDTO.class);
+        LoginDTO loginDTO;
+        try{
+            loginDTO = new ObjectMapper().readValue(message, LoginDTO.class);
+        } catch (JsonProcessingException e) {
+            log.error("Ошибка десериализации сообщения логина: {}", e.getMessage());
+            return;
+        }
         log.info("Получено сообщение о логине: {}", loginDTO);
 
         String decryptedPassword = EncryptionUtil.decrypt(loginDTO.getPassword());
@@ -91,11 +102,17 @@ public class KafkaUserAuthListener {
     }
 
 
-    private void sendResponse(String topic, String requestId, String message) throws JsonProcessingException {
+    private void sendResponse(String topic, String requestId, String message) {
         ResponseDTO responseDTO = new ResponseDTO(requestId, message);
+        //String jsonResponse = objectMapper.writeValueAsString(responseDTO); // Сериализация ответа в json
 
-        ObjectMapper objectMapper = new ObjectMapper();
-        String jsonResponse = objectMapper.writeValueAsString(responseDTO); // Сериализация ответа в json
+        String jsonResponse;
+        try{
+            jsonResponse = new ObjectMapper().writeValueAsString(responseDTO);
+        } catch (JsonProcessingException e) {
+            log.error("Ошибка сериализации в JSON: {}", e.getMessage());
+            return;
+        }
 
         kafkaTemplate.send(topic, jsonResponse);
         log.info("Ответ отправлен в топик {}: {}", topic, jsonResponse);

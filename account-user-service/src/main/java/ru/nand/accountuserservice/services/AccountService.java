@@ -87,7 +87,6 @@ public class AccountService {
     public void patchAccount(AccountPatchRequest accountPatchRequest, String firstUsername) {
         String url = REGISTRY_SERVICE_URL + "/api/users/edit";
 
-        System.out.println("URL edit:" + url);
         // Формируем DTO для отправки
         AccountPatchDTO accountPatchDTO = new AccountPatchDTO();
         accountPatchDTO.setUsername(accountPatchRequest.getUsername());

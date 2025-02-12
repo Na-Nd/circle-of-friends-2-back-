@@ -7,18 +7,22 @@
         <sourceOutputDir name="target/generated-sources/annotations" />
         <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
         <outputRelativeToContentRoot value="true" />
+        <module name="post-user-service" />
         <module name="auth-service" />
         <module name="account-user-service" />
+        <module name="posts-user-service" />
         <module name="registry-service" />
         <module name="notifications-service" />
       </profile>
     </annotationProcessing>
     <bytecodeTargetLevel>
       <module name="account-service" target="21" />
+      <module name="post-user-service" target="21" />
       <module name="posts-service" target="21" />
       <module name="shared-dto" target="1.8" />
       <module name="shared-things" target="21" />
       <module name="user-account-service" target="21" />
+      <module name="user-posts-service" target="21" />
     </bytecodeTargetLevel>
   </component>
   <component name="JavacSettings">
@@ -27,10 +31,13 @@
       <module name="account-user-service" options="-parameters" />
       <module name="auth-service" options="-parameters" />
       <module name="notifications-service" options="-parameters" />
+      <module name="post-user-service" options="-parameters" />
       <module name="posts-service" options="-parameters" />
+      <module name="posts-user-service" options="-parameters" />
       <module name="registry-service" options="-parameters" />
       <module name="shared-things" options="-parameters" />
       <module name="user-account-service" options="-parameters" />
+      <module name="user-posts-service" options="-parameters" />
     </option>
   </component>
 </project>

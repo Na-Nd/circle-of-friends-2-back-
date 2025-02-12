@@ -13,15 +13,20 @@
         <option value="$PROJECT_DIR$/posts-service/pom.xml" />
         <option value="$PROJECT_DIR$/account-user-service/pom.xml" />
         <option value="$PROJECT_DIR$/notifications-service/pom.xml" />
+        <option value="$PROJECT_DIR$/post-user-service/pom.xml" />
+        <option value="$PROJECT_DIR$/user-posts-service/pom.xml" />
+        <option value="$PROJECT_DIR$/posts-user-service/pom.xml" />
       </list>
     </option>
     <option name="ignoredFiles">
       <set>
         <option value="$PROJECT_DIR$/account-service/pom.xml" />
+        <option value="$PROJECT_DIR$/post-user-service/pom.xml" />
         <option value="$PROJECT_DIR$/posts-service/pom.xml" />
         <option value="$PROJECT_DIR$/shared-dto/pom.xml" />
         <option value="$PROJECT_DIR$/shared-things/pom.xml" />
         <option value="$PROJECT_DIR$/user-account-service/pom.xml" />
+        <option value="$PROJECT_DIR$/user-posts-service/pom.xml" />
       </set>
     </option>
   </component>

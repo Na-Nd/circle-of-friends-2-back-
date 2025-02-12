@@ -24,19 +24,21 @@ public class KafkaUserNotificationsListener {
         this.notificationService = notificationService;
     }
 
-
     @KafkaListener(topics = "notifications-registry-topic", groupId = "registry-group")
-    public void handleUserNotification(String message) throws JsonProcessingException {
-        ObjectMapper mapper = new ObjectMapper();
+    public void handleUserNotification(String message) {
 
-        NotificationDTO notificationDTO = mapper.readValue(message, NotificationDTO.class);
+        NotificationDTO notificationDTO;
+        try{
+            notificationDTO = new ObjectMapper().readValue(message, NotificationDTO.class);
+        } catch (JsonProcessingException e){
+            log.error("Ошибка десериализации сообщения: {}", e.getMessage());
+            return;
+        }
         log.info("Получено уведомление для пользователя: {}", notificationDTO.getUserEmail());
 
-        // Если пользователь не нашелся значит это его старая почта и сохранять такое уведомление не нужно
-        // А если пользователь нашелся значит это новая почта и можно сохранить
         User user = userService.findByEmail(notificationDTO.getUserEmail());
         if(user != null) {
-            // TODO modelMapper
+            // мб modelMapper
             Notification notification = new Notification();
             notification.setUser(user);
             notification.setText(notificationDTO.getMessage());
