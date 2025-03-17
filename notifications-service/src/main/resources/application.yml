@@ -1,0 +1,48 @@
+spring:
+  application:
+    name: notifications-service
+  mail:
+    host: ${MAIL_HOST}
+    port: ${MAIL_PORT}
+    username: ${MAIL_USERNAME}
+    password: ${MAIL_PASSWORD}
+    properties:
+      mail:
+        smtp:
+          starttls:
+            enable: true
+  cassandra:
+    keyspace-name: ${CASSANDRA_KEYSPACE_NAME}
+    contact-points: ${CASSANDRA_CONTACT_POINTS}
+    port: ${CASSANDRA_PORT}
+    local-datacenter: ${CASSANDRA_LOCAL_DATACENTER}
+    schema-action: create_if_not_exists
+
+server:
+  port: 8083
+
+jwt:
+  secret: ${JWT_SECRET}
+  expiration: ${JWT_EXPIRATION}
+  access:
+    expiration: ${ACCESS_JWT_EXPIRATION}
+  refresh:
+    expiration: ${REFRESH_JWT_EXPIRATION}
+
+service:
+  jwt:
+    secret: ${SERVICE_JWT_SECRET}
+
+interservice:
+  header:
+    name: ${INTERSERVICE_HEADER_NAME}
+
+registry:
+  service:
+    url: ${REGISTRY_SERVICE_URL}
+
+grpc:
+  client:
+    tokenRefreshRegistryService:
+      address: localhost:9090
+      negotiationType: plaintext

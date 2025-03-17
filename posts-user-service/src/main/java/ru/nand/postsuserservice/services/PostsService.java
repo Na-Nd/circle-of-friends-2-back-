@@ -1,32 +1,34 @@
 package ru.nand.postsuserservice.services;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.*;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
-import ru.nand.postsuserservice.entities.DTO.CommentDTO;
+import ru.nand.postsuserservice.entities.DTO.PostCreateDTO;
 import ru.nand.postsuserservice.entities.DTO.PostDTO;
+import ru.nand.postsuserservice.entities.DTO.PostUpdateDTO;
 import ru.nand.postsuserservice.entities.requests.PostRequest;
-import ru.nand.postsuserservice.entities.requests.PostUpdateRequest;
 import ru.nand.postsuserservice.utils.JwtUtil;
-import org.springframework.core.ParameterizedTypeReference;
 import ru.nand.postsuserservice.utils.PostsUtil;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
 @Slf4j
 @Service
+@RequiredArgsConstructor
 public class PostsService {
-
-    private final RestTemplate restTemplate;
-    private final JwtUtil jwtUtil;
     private final PostsUtil postsUtil;
+    private final RestTemplate restTemplate;
+    private final ObjectMapper objectMapper;
+    private final JwtUtil jwtUtil;
 
     @Value("${interservice.header.name}")
     private String HEADER_NAME;
@@ -34,51 +36,66 @@ public class PostsService {
     @Value("${registry.service.url}")
     private String REGISTRY_SERVICE_URL;
 
-    @Autowired
-    public PostsService(RestTemplate restTemplate, JwtUtil jwtUtil, PostsUtil postsUtil) {
-        this.restTemplate = restTemplate;
-        this.jwtUtil = jwtUtil;
-        this.postsUtil = postsUtil;
-    }
+    /// Создание поста
+    public String createPost(PostRequest postRequest, String ownerUsername){
+        List<String> uploadedImagesUrls = new ArrayList<>();
 
-    // Добавление поста
-    public String createPost(PostRequest postRequest) throws RuntimeException {
-        String imageName = postsUtil.saveImage(postRequest.getImage());
+        // Если список фотографий не пустой
+        if (postRequest.getImages() != null && !postRequest.getImages().isEmpty()) {
+            // Загрузка файлов поста на диск и получение их уникальных названий
+            uploadedImagesUrls = postsUtil.uploadImages(postRequest.getImages());
+            log.debug("Фотографии загружены, уникальные названия: {}", uploadedImagesUrls);
+        }
 
-        PostDTO postDTO = new PostDTO(postRequest.getText(), postRequest.getTags(), postRequest.getAuthor(), imageName, null);
+        // Создание DTO для формирования в JSON
+        PostCreateDTO postCreateDTO = PostCreateDTO.builder()
+                .text(postRequest.getText())
+                .tags(postRequest.getTags())
+                .imagesUrls(uploadedImagesUrls)
+                .ownerUsername(ownerUsername)
+                .build();
+
+        // Складываем DTO в JSON для передачи в registry-service
         String requestMessage;
         try {
-            requestMessage = new ObjectMapper().writeValueAsString(postDTO);
-        } catch (JsonProcessingException e) {
-            log.error("Ошибка сериализации данных запроса для создания поста: {}", e.getMessage());
-            throw new RuntimeException("Ошибка сериализации данных запроса");
+            requestMessage = objectMapper.writeValueAsString(postCreateDTO);
+        } catch (JsonProcessingException e){
+            log.warn("Ошибка сериализации данных при создании поста: {}", e.getMessage());
+            throw new RuntimeException("Ошибка сериализации данных");
         }
+        log.debug("Сформирован JSON для передачи в registry-service: {}", requestMessage);
 
         String url = REGISTRY_SERVICE_URL + "/api/posts";
         HttpHeaders headers = new HttpHeaders();
         headers.set(HEADER_NAME, "Bearer " + jwtUtil.generateInterServiceJwt());
+        headers.setContentType(MediaType.APPLICATION_JSON);
 
         HttpEntity<String> requestEntity = new HttpEntity<>(requestMessage, headers);
-        log.debug("Отправка запроса на создание поста, ДТО: {}", postDTO);
+        log.debug("Отправка запроса на создание поста: {}", requestMessage);
 
-        try {
-            restTemplate.exchange(
+        try{
+            ResponseEntity<String> response = restTemplate.exchange(
                     url,
                     HttpMethod.POST,
                     requestEntity,
-                    Void.class
+                    String.class
             );
-        } catch (Exception e) {
-            log.error("Ошибка при отправке данных о посте в registry-service: {}", e.getMessage());
-            throw new RuntimeException("Ошибка при отправке данных о посте: " + e.getMessage());
-        }
 
-        return imageName;
+            if(!response.getStatusCode().is2xxSuccessful()){
+                log.warn("Неуспешный ответ от registry-service при создании поста: {}", response.getStatusCode());
+                throw new RuntimeException("Неуспешный ответ от registry-service: " + response.getStatusCode());
+            }
+
+            return response.getBody();
+        } catch (Exception e){
+            log.warn("Ошибка при отправке запроса в registry-service на создание поста: {}", e.getMessage());
+            throw new RuntimeException("Ошибка при создании поста: " + e.getMessage());
+        }
     }
 
-    // Получение конкретного поста по id
-    public PostDTO getPostById(int id) throws RuntimeException {
-        String url = REGISTRY_SERVICE_URL + "/api/posts/" + id;
+    /// Получение поста по id
+    public PostDTO getPostById(int postId) {
+        String url = REGISTRY_SERVICE_URL + "/api/posts/" + postId;
         HttpHeaders headers = new HttpHeaders();
         headers.set(HEADER_NAME, "Bearer " + jwtUtil.generateInterServiceJwt());
 
@@ -91,26 +108,157 @@ public class PostsService {
                     requestEntity,
                     String.class
             );
-            PostDTO postDTO = new ObjectMapper().readValue(response.getBody(), PostDTO.class);
 
-            postDTO.setImageBase64(postsUtil.encodeImageToBase64(postDTO.getFilename()));
+            if (!response.getStatusCode().is2xxSuccessful()) {
+                log.warn("Неуспешный ответ от registry-service при получении поста по id {}: {}", postId, response.getStatusCode());
+                throw new RuntimeException("Неуспешный ответ от registry-service: " + response.getStatusCode());
+            }
+
+            // Десериализуем в DTO
+            PostDTO postDTO = objectMapper.readValue(response.getBody(), PostDTO.class);
+
+            // Если список уникальных имен фотографий не пустой
+            if (!postDTO.getImagesUrls().isEmpty()) {
+                // То загружаем изображения и добавляем их в DTO в формате Base64
+                List<String> imagesBase64 = new ArrayList<>();
+                for (String imageName : postDTO.getImagesUrls()) {
+                    String base64Image = postsUtil.downloadAndEncodeImage(imageName);
+                    imagesBase64.add(base64Image);
+                }
+                postDTO.setImagesBase64(imagesBase64);
+            }
 
             return postDTO;
         } catch (Exception e) {
-            log.error("Ошибка при получении поста из registry-service: {}", e.getMessage());
-            throw new RuntimeException("Ошибка при получении поста: " + e.getMessage());
+            log.warn("Ошибка при получении поста: {}", e.getMessage());
+            throw new RuntimeException("Ошибка при получении поста с id " + postId + ": " + e.getMessage());
         }
     }
 
-    // Получение всех постов
-    public List<PostDTO> getAllPosts() throws RuntimeException{
+    /// Удаление поста
+    public String deletePostById(int postId, String postOwnerUsername){
+        String url = REGISTRY_SERVICE_URL + "/api/posts/" + postId;
+        HttpHeaders headers = new HttpHeaders();
+        headers.set(HEADER_NAME, "Bearer " + jwtUtil.generateInterServiceJwt());
+
+        HttpEntity<String> requestEntity = new HttpEntity<>(postOwnerUsername, headers);
+
+        try{
+            ResponseEntity<String> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.DELETE,
+                    requestEntity,
+                    String.class
+            );
+
+            if (!response.getStatusCode().is2xxSuccessful()) {
+                log.warn("Неуспешный ответ от registry-service при удалении поста с id{}: {}", postId, response.getStatusCode());
+                throw new RuntimeException("Неуспешный ответ от registry-service: " + response.getStatusCode());
+            }
+
+            // Получаем изображения
+            List<String> filenames;
+            try{
+                filenames = objectMapper.readValue(response.getBody(), new TypeReference<List<String>>() {});
+            } catch (JsonProcessingException e){
+                log.warn("Ошибка при десериализации сообщения: {}", e.getMessage());
+                throw new RuntimeException("Ошибка при десериализации ответа от registry-service");
+            }
+
+            // Удаляем изображения с диска
+            for(String filename : filenames){
+                postsUtil.deleteFile("/imagesFolder/" + filename);
+            }
+
+            return response.getBody();
+        } catch (Exception e){
+            log.warn("Ошибка при удалении поста с id {}: {}", postId, e.getMessage());
+            throw new RuntimeException("Ошибка при удалении поста с id: " + postId + ": " + e.getMessage());
+        }
+    }
+
+    /// Редактирование своего поста (PUT)
+    public String updatePost(int postId, PostRequest postRequest, String postOwnerUsername){
+        // Если текущий пользователь является автором поста
+        PostDTO existingPost = getPostById(postId);
+        if(!existingPost.getOwnerUsername().equals(postOwnerUsername)){
+            throw new RuntimeException("У вас нет такого поста");
+        }
+
+        List<String> uploadedImagesUrls = new ArrayList<>();
+
+        // Если список фотографий в запросе на обновление не пустой
+        if (postRequest.getImages() != null && !postRequest.getImages().isEmpty()) {
+            // То удаляем старые изображения с диска, если они есть
+            if (existingPost.getImagesUrls() != null && !existingPost.getImagesUrls().isEmpty()) {
+                for(String filename : existingPost.getImagesUrls()){
+                    try {
+                        postsUtil.deleteFile("/imagesFolder/" + filename);
+                    } catch (Exception e){
+                        log.warn("Ошибка удаления старого изображения {}: {}", filename, e.getMessage());
+                        throw new RuntimeException("Ошибка удаления изображения");
+                    }
+                }
+            }
+
+            // И кидаем на диск новые изображения из запроса, сохраняя уникальное название для передачи в registry-service
+            uploadedImagesUrls = postsUtil.uploadImages(postRequest.getImages());
+        }
+
+        // Формируем DTO для отправки
+        PostUpdateDTO postUpdateDTO = PostUpdateDTO.builder()
+                .text(postRequest.getText())
+                .tags(postRequest.getTags())
+                .imagesUrls(uploadedImagesUrls)
+                .ownerUsername(postOwnerUsername)
+                .build();
+
+        // Складываем DTO в JSON для передачи в registry-service
+        String requestMessage;
+        try {
+            requestMessage = objectMapper.writeValueAsString(postUpdateDTO);
+        } catch (JsonProcessingException e){
+            log.warn("Ошибка сериализации данных при обновлении поста: {}", e.getMessage());
+            throw new RuntimeException("Ошибка сериализации данных");
+        }
+
+        String url = REGISTRY_SERVICE_URL + "/api/posts/" + postId;
+        HttpHeaders headers = new HttpHeaders();
+        headers.set(HEADER_NAME, "Bearer " + jwtUtil.generateInterServiceJwt());
+        headers.setContentType(MediaType.APPLICATION_JSON);
+
+        HttpEntity<String> requestEntity = new HttpEntity<>(requestMessage, headers);
+        log.debug("Отправка запроса на обновление поста, JSON: {}", requestMessage);
+
+        try {
+            ResponseEntity<String> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.PUT,
+                    requestEntity,
+                    String.class
+            );
+
+            if(!response.getStatusCode().is2xxSuccessful()){
+                log.warn("Неуспешный ответ от registry-service при обновлении поста по id {}: {}", postId, response.getStatusCode());
+                throw new RuntimeException("Неуспешный ответ от registry-service: " + response.getStatusCode());
+            }
+
+            return response.getBody();
+        } catch (Exception e){
+            log.warn("Ошибка при отправке запроса в registry-service на обновление поста: {}", e.getMessage());
+            throw new RuntimeException("Ошибка при обновлении поста: " + e.getMessage());
+        }
+    }
+
+    /// Получение всех постов
+    public List<PostDTO> getAllPosts(){
         String url = REGISTRY_SERVICE_URL + "/api/posts";
         HttpHeaders headers = new HttpHeaders();
         headers.set(HEADER_NAME, "Bearer " + jwtUtil.generateInterServiceJwt());
 
         HttpEntity<Void> requestEntity = new HttpEntity<>(headers);
 
-        try {
+        try{
             ResponseEntity<List<PostDTO>> response = restTemplate.exchange(
                     url,
                     HttpMethod.GET,
@@ -118,159 +266,44 @@ public class PostsService {
                     new ParameterizedTypeReference<>() {} // Чтобы exchange мог обрабатывать генерк-класс List
             );
 
+            if(!response.getStatusCode().is2xxSuccessful()){
+                log.warn("Неуспешный ответ от registry-service при получении всех постов: {}", response.getStatusCode());
+                throw new RuntimeException("Неуспешный ответ от registry-service: " + response.getStatusCode());
+            }
+
             List<PostDTO> posts = response.getBody();
             if (posts == null) return Collections.emptyList();
 
-            posts.forEach(post -> post.setImageBase64(postsUtil.encodeImageToBase64(post.getFilename())));
-
-            return posts;
-        } catch (Exception e) {
-            log.error("Ошибка при получении всех постов: {}", e.getMessage());
-            throw new RuntimeException("Ошибка при получении постов");
-        }
-    }
-
-    // Получение постов пользователя
-    public List<PostDTO> getPostsByAuthor(String author) throws RuntimeException{
-        String url = REGISTRY_SERVICE_URL + "/api/posts/user/" + author;
-        HttpHeaders headers = new HttpHeaders();
-        headers.set(HEADER_NAME, "Bearer " + jwtUtil.generateInterServiceJwt());
-
-        HttpEntity<Void> requestEntity = new HttpEntity<>(headers);
-
-        try{
-            ResponseEntity<List<PostDTO>> response = restTemplate.exchange(
-                    url,
-                    HttpMethod.GET,
-                    requestEntity,
-                    new ParameterizedTypeReference<>() {} // Чтобы exchange мог обрабатывать генерик-класс List
-            );
-
-            List<PostDTO> posts = response.getBody();
-            if(posts == null) return Collections.emptyList();
-
-            posts.forEach(post -> post.setImageBase64(postsUtil.encodeImageToBase64(post.getFilename())));
-
-            return posts;
-        } catch (Exception e){
-            log.error("Ошибка при получении постов пользователя {}: {}", author, e.getMessage());
-            throw new RuntimeException("Ошибка при получении постов пользователя");
-        }
-    }
-
-    // Обновление поста
-    public void updatePost(int postId, PostUpdateRequest postUpdateRequest, UserDetails userDetails) throws RuntimeException{
-        String url = REGISTRY_SERVICE_URL + "/api/posts/" + postId;
-
-        // Проверяем автора
-        PostDTO existingPost = getPostById(postId);
-        if (!existingPost.getAuthor().equals(userDetails.getUsername())) {
-            throw new RuntimeException("Вы не можете редактировать чужой пост");
-        }
-
-        String newFilename = null;
-        if (postUpdateRequest.getImage() != null && !postUpdateRequest.getImage().isEmpty()) {
-            postsUtil.deleteImage(existingPost.getFilename());
-            newFilename = postsUtil.saveImage(postUpdateRequest.getImage());
-        }
-
-        PostDTO updatedPost = new PostDTO(
-                postUpdateRequest.getText() != null ? postUpdateRequest.getText() : existingPost.getText(),
-                postUpdateRequest.getTags() != null ? postUpdateRequest.getTags() : existingPost.getTags(),
-                existingPost.getAuthor(),
-                newFilename != null ? newFilename : existingPost.getFilename(),
-                null
-        );
-
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_JSON);
-        headers.set(HEADER_NAME, "Bearer " + jwtUtil.generateInterServiceJwt());
-
-        HttpEntity<PostDTO> requestEntity = new HttpEntity<>(updatedPost, headers);
-
-        log.debug("Отправка PATCH-запроса в registry-service: {}", updatedPost);
-        log.debug("Заголовки запроса: {}", headers);
-
-        try {
-            ResponseEntity<Void> response = restTemplate.exchange(url, HttpMethod.PATCH, requestEntity, Void.class);
-            if (!response.getStatusCode().is2xxSuccessful()) {
-                throw new RuntimeException("Ошибка при обновлении поста: " + response.getStatusCode());
+            // Подгрузка изображений для каждого поста с переводом изображения в base64
+            for(PostDTO post : posts){
+                // Если список уникальных имен фотографий не пустой
+                if (!post.getImagesUrls().isEmpty()) {
+                    // То загружаем изображения и добавляем их в DTO в формате Base64
+                    List<String> imagesBase64 = new ArrayList<>();
+                    for (String imageName : post.getImagesUrls()) {
+                        String base64Image = postsUtil.downloadAndEncodeImage(imageName);
+                        imagesBase64.add(base64Image);
+                    }
+                    post.setImagesBase64(imagesBase64);
+                }
             }
-        } catch (Exception e) {
-            log.error("Ошибка при обновлении поста: {}", e.getMessage());
-            throw new RuntimeException("Ошибка при обновлении поста");
-        }
-    }
 
-
-    // Удаление поста
-    public void deletePost(int postId, UserDetails userDetails) throws RuntimeException{
-        String url = REGISTRY_SERVICE_URL + "/api/posts/" + postId;
-
-        // Проверяем автора на клиентской стороне
-        PostDTO existingPost = getPostById(postId);
-        if (!existingPost.getAuthor().equals(userDetails.getUsername())) {
-            throw new RuntimeException("Вы не можете удалить чужой пост");
-        }
-
-        postsUtil.deleteImage(existingPost.getFilename());
-
-        HttpHeaders headers = new HttpHeaders();
-        headers.set(HEADER_NAME, "Bearer " + jwtUtil.generateInterServiceJwt());
-
-        HttpEntity<Void> requestEntity = new HttpEntity<>(headers);
-
-        try{
-            restTemplate.exchange(
-                    url,
-                    HttpMethod.DELETE,
-                    requestEntity,
-                    Void.class
-            );
+            return posts;
         } catch (Exception e){
-            log.error("Ошибка при удалении поста: {}", e.getMessage());
-            throw new RuntimeException("Ошибка при удалении поста");
+            log.warn("Ошибка при получении всех постов: {}", e.getMessage());
+            throw new RuntimeException("Ошибка при получениии всех постов: " + e.getMessage());
         }
     }
 
-    // Получение поста по тэгам
-    public List<PostDTO> getPostsByTags(List<String> tags) throws RuntimeException{
-        String url = REGISTRY_SERVICE_URL + "/api/posts/search?tags=" + String.join(",", tags);
-
+    /// Получение постов конкретного пользователя
+    public List<PostDTO> getPostsByAuthor(String authorUsername){
+        String url = REGISTRY_SERVICE_URL + "/api/posts/user/" + authorUsername;
         HttpHeaders headers = new HttpHeaders();
         headers.set(HEADER_NAME, "Bearer " + jwtUtil.generateInterServiceJwt());
 
         HttpEntity<Void> requestEntity = new HttpEntity<>(headers);
 
         try {
-            ResponseEntity<List<PostDTO>> response = restTemplate.exchange(
-                    url, HttpMethod.GET, requestEntity, new ParameterizedTypeReference<>() {}
-            );
-
-            List<PostDTO> posts = response.getBody();
-            if (posts == null) return Collections.emptyList();
-
-            for (PostDTO post : posts) {
-                post.setImageBase64(postsUtil.encodeImageToBase64(post.getFilename()));
-            }
-
-            return posts;
-        } catch (Exception e) {
-            log.error("Ошибка при поиске постов по тегам: {}", e.getMessage());
-            throw new RuntimeException("Ошибка при поиске постов");
-        }
-    }
-
-    // Получения поста по тексту
-    public List<PostDTO> getPostsByText(String text) throws RuntimeException{
-        String url = REGISTRY_SERVICE_URL + "/api/posts/search-by-text?text=" + text;
-
-        HttpHeaders headers = new HttpHeaders();
-        headers.set(HEADER_NAME, "Bearer " + jwtUtil.generateInterServiceJwt());
-
-        HttpEntity<Void> requestEntity = new HttpEntity<>(headers);
-
-        try{
             ResponseEntity<List<PostDTO>> response = restTemplate.exchange(
                     url,
                     HttpMethod.GET,
@@ -278,23 +311,36 @@ public class PostsService {
                     new ParameterizedTypeReference<>() {}
             );
 
-            List<PostDTO> posts = response.getBody();
+            if(!response.getStatusCode().is2xxSuccessful()){
+                log.warn("Неуспешный ответ от registry-service при получении постов автора {}: {}", authorUsername, response.getStatusCode());
+                throw new RuntimeException("Неуспешный ответ от registry-service: " + response.getStatusCode());
+            }
 
-            if(posts == null) return Collections.emptyList();
+            List<PostDTO> posts = response.getBody();
+            if (posts == null) return Collections.emptyList();
 
             for(PostDTO post : posts){
-                post.setImageBase64(postsUtil.encodeImageToBase64(post.getFilename()));
+                // Если список уникальных имен фотографий не пустой
+                if (!post.getImagesUrls().isEmpty()) {
+                    // То загружаем изображения и добавляем их в DTO в формате Base64
+                    List<String> imagesBase64 = new ArrayList<>();
+                    for (String imageName : post.getImagesUrls()) {
+                        String base64Image = postsUtil.downloadAndEncodeImage(imageName);
+                        imagesBase64.add(base64Image);
+                    }
+                    post.setImagesBase64(imagesBase64);
+                }
             }
 
             return posts;
-        } catch (Exception e) {
-            log.error("Ошибка при получении поста по тексту: {}", e.getMessage());
-            throw new RuntimeException("Ошибка при получении постов");
+        } catch (Exception e){
+            log.warn("Ошибка при получении постов пользователя {}: {}", authorUsername, e.getMessage());
+            throw new RuntimeException("Ошибка при получении постов пользователя " + authorUsername + ": " + e.getMessage());
         }
     }
 
-    // Получить посты подписок
-    public List<PostDTO> getSubscriptionPosts(String username) throws RuntimeException{
+    /// Получение постов подписок
+    public List<PostDTO> getSubscriptionsPosts(String username){
         String url = REGISTRY_SERVICE_URL + "/api/posts/subscriptions?username=" + username;
 
         HttpHeaders headers = new HttpHeaders();
@@ -310,193 +356,123 @@ public class PostsService {
                     new ParameterizedTypeReference<>() {}
             );
 
+            if(!response.getStatusCode().is2xxSuccessful()){
+                log.warn("Неуспешный ответ от registry-service при получении постов подписок: {}", response.getStatusCode());
+                throw new RuntimeException("Неуспешный ответ от registry-service: " + response.getStatusCode());
+            }
+
             List<PostDTO> posts = response.getBody();
-            if(posts == null) return Collections.emptyList();
+            if (posts == null) return Collections.emptyList();
 
             for(PostDTO post : posts){
-                post.setImageBase64(postsUtil.encodeImageToBase64(post.getFilename()));
+                // Если список уникальных имен фотографий не пустой
+                if (!post.getImagesUrls().isEmpty()) {
+                    // То загружаем изображения и добавляем их в DTO в формате Base64
+                    List<String> imagesBase64 = new ArrayList<>();
+                    for (String imageName : post.getImagesUrls()) {
+                        String base64Image = postsUtil.downloadAndEncodeImage(imageName);
+                        imagesBase64.add(base64Image);
+                    }
+                    post.setImagesBase64(imagesBase64);
+                }
             }
 
             return posts;
         } catch (Exception e){
-            log.error("Ошибка при получении постов подписок: {}", e.getMessage());
-            throw new RuntimeException("Ошибка при получении постов подписок");
+            log.warn("Ошибка при получении постов подписок польователя {}: {}", username, e.getMessage());
+            throw new RuntimeException("Ошибка при получении постов подписок пользователя " + username + ": " + e.getMessage());
         }
     }
 
-    // Лайк поста
-    public void likePost(int postId, String username) throws RuntimeException{
-        String url = REGISTRY_SERVICE_URL + "/api/posts/" + postId + "/like";
+    /// Поиск постов по тэгам
+    public List<PostDTO> getPostsByTags(List<String> tags){
+        String url = REGISTRY_SERVICE_URL + "/api/posts/search-by-tags?tags=" + String.join(",", tags);
 
-        HttpHeaders headers = new HttpHeaders();
-        headers.set(HEADER_NAME, "Bearer " + jwtUtil.generateInterServiceJwt());
-        headers.setContentType(MediaType.APPLICATION_JSON);
-
-        HttpEntity<String> requestEntity = new HttpEntity<>(username, headers);
-
-        try{
-            restTemplate.exchange(url, HttpMethod.POST, requestEntity, Void.class);
-        } catch (Exception e){
-            log.error("Ошибка при лайке поста с id {}: {}", postId, e.getMessage());
-            throw new RuntimeException("Ошибка при лайке поста: " + e.getMessage());
-        }
-    }
-
-    // Снятие лайка с поста
-    public void unlikePost(int postId, String username) throws RuntimeException{
-        String url = REGISTRY_SERVICE_URL + "/api/posts/" + postId + "/like";
-
-        HttpHeaders headers = new HttpHeaders();
-        headers.set(HEADER_NAME, "Bearer " + jwtUtil.generateInterServiceJwt());
-        headers.setContentType(MediaType.APPLICATION_JSON);
-
-        HttpEntity<String> requestEntity = new HttpEntity<>(username, headers);
-
-        try{
-            restTemplate.exchange(url, HttpMethod.DELETE, requestEntity, Void.class);
-        } catch (Exception e){
-            log.error("Ошибка при удалении лайка с поста с id {}: {}", postId, e.getMessage());
-            throw new RuntimeException("Ошибка при снятии лайка: " + e.getMessage());
-        }
-    }
-
-    // Получение кол-ва лайков
-    public int getLikesCount(int postId) throws RuntimeException{
-        String url = REGISTRY_SERVICE_URL + "/api/posts/" + postId + "/likes/count";
-
-        HttpHeaders headers = new HttpHeaders();
-        headers.set(HEADER_NAME, "Bearer " + jwtUtil.generateInterServiceJwt());
-
-        try{
-            ResponseEntity<Integer> response = restTemplate.exchange(
-                    url, HttpMethod.GET, null, Integer.class
-            );
-
-            return response.getBody();
-        } catch (Exception e){
-            log.error("Ошибка при получении количества лайков поста с id {}: {}", postId, e.getMessage());
-            throw new RuntimeException("Ошибка при получении количества лайков поста: " + e.getMessage());
-        }
-    }
-
-    // Получение списка лайкнувших
-    public List<String> getLikedUsers(int postId) throws RuntimeException{
-        String url = REGISTRY_SERVICE_URL + "/api/posts/" + postId + "/likes";
-
-        HttpHeaders headers = new HttpHeaders();
-        headers.set(HEADER_NAME, "Bearer " + jwtUtil.generateInterServiceJwt());
-
-        try{
-            ResponseEntity<List<String>> response = restTemplate.exchange(
-                    url,
-                    HttpMethod.GET,
-                    null,
-                    new ParameterizedTypeReference<>() {}
-            );
-
-            return response.getBody();
-        } catch (Exception e){
-            log.error("Ошибка получения списка лайкнувших пост с id {}: {}", postId, e.getMessage());
-            throw new RuntimeException("Ошибка получения списка лайкнувших: " + e.getMessage());
-        }
-    }
-
-    // Добавить комментарий
-    public void addComment(int postId, String username, String text) {
-        String url = REGISTRY_SERVICE_URL + "/api/posts/" + postId + "/comments";
-        HttpHeaders headers = new HttpHeaders();
-        headers.set(HEADER_NAME, "Bearer " + jwtUtil.generateInterServiceJwt());
-        headers.setContentType(MediaType.APPLICATION_JSON);
-
-        CommentDTO request = new CommentDTO(username, text);
-        String requestBody;
-        try {
-            requestBody = new ObjectMapper().writeValueAsString(request);
-        } catch (JsonProcessingException e) {
-            log.error("Ошибка сериализации CommentRequest: {}", e.getMessage());
-            throw new RuntimeException("Ошибка сериализации данных запроса");
-        }
-
-        HttpEntity<String> requestEntity = new HttpEntity<>(requestBody, headers);
-
-        try {
-            restTemplate.exchange(url, HttpMethod.POST, requestEntity, Void.class);
-        } catch (Exception e) {
-            log.error("Ошибка при добавлении комментария: {}", e.getMessage());
-            throw new RuntimeException("Ошибка при добавлении комментария");
-        }
-    }
-
-    // Редактировать комментарий
-    public void editComment(int postId, int commentId, String username, String newText) {
-        String url = REGISTRY_SERVICE_URL + "/api/posts/" + postId + "/comments/" + commentId;
-        HttpHeaders headers = new HttpHeaders();
-        headers.set(HEADER_NAME, "Bearer " + jwtUtil.generateInterServiceJwt());
-        headers.setContentType(MediaType.APPLICATION_JSON);
-
-        CommentDTO request = new CommentDTO(username, newText);
-        String requestBody;
-        try {
-            requestBody = new ObjectMapper().writeValueAsString(request);
-        } catch (JsonProcessingException e) {
-            log.error("Ошибка сериализации CommentUpdateRequest: {}", e.getMessage());
-            throw new RuntimeException("Ошибка сериализации данных запроса");
-        }
-
-        HttpEntity<String> requestEntity = new HttpEntity<>(requestBody, headers);
-
-        try {
-            restTemplate.exchange(url, HttpMethod.PATCH, requestEntity, Void.class);
-        } catch (Exception e) {
-            log.error("Ошибка при редактировании комментария: {}", e.getMessage());
-            throw new RuntimeException("Ошибка при редактировании комментария");
-        }
-    }
-
-    // Удалить комментарий
-    public void deleteComment(int postId, int commentId, String username) {
-        String url = REGISTRY_SERVICE_URL + "/api/posts/" + postId + "/comments/" + commentId;
-        HttpHeaders headers = new HttpHeaders();
-        headers.set(HEADER_NAME, "Bearer " + jwtUtil.generateInterServiceJwt());
-        headers.setContentType(MediaType.APPLICATION_JSON);
-
-        CommentDTO request = new CommentDTO();
-        request.setUsername(username);
-        String requestBody;
-        try {
-            requestBody = new ObjectMapper().writeValueAsString(request);
-        } catch (JsonProcessingException e) {
-            log.error("Ошибка сериализации CommentDeleteRequest: {}", e.getMessage());
-            throw new RuntimeException("Ошибка сериализации данных запроса");
-        }
-
-        HttpEntity<String> requestEntity = new HttpEntity<>(requestBody, headers);
-
-        try {
-            restTemplate.exchange(url, HttpMethod.DELETE, requestEntity, Void.class);
-        } catch (Exception e) {
-            log.error("Ошибка при удалении комментария: {}", e.getMessage());
-            throw new RuntimeException("Ошибка при удалении комментария");
-        }
-    }
-
-    // Получить комментарии с пагинацией
-    public List<CommentDTO> getComments(int postId, int page, int size) {
-        String url = REGISTRY_SERVICE_URL + "/api/posts/" + postId + "/comments?page=" + page + "&size=" + size;
         HttpHeaders headers = new HttpHeaders();
         headers.set(HEADER_NAME, "Bearer " + jwtUtil.generateInterServiceJwt());
 
         HttpEntity<Void> requestEntity = new HttpEntity<>(headers);
 
-        try {
-            ResponseEntity<List<CommentDTO>> response = restTemplate.exchange(
-                    url, HttpMethod.GET, requestEntity, new ParameterizedTypeReference<List<CommentDTO>>() {}
+        try{
+            ResponseEntity<List<PostDTO>> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    requestEntity,
+                    new ParameterizedTypeReference<>() {}
             );
-            return response.getBody();
-        } catch (Exception e) {
-            log.error("Ошибка при получении комментариев: {}", e.getMessage());
-            throw new RuntimeException("Ошибка при получении комментариев");
+
+            if(!response.getStatusCode().is2xxSuccessful()){
+                log.warn("Неуспешный ответ от registry-service при получении постов по тэгам {}: {}", tags, response.getStatusCode());
+                throw new RuntimeException("Неуспешный ответ от registry-service: " + response.getStatusCode());
+            }
+
+            List<PostDTO> posts = response.getBody();
+            if (posts == null) return Collections.emptyList();
+
+            for(PostDTO post : posts){
+                // Если список уникальных имен фотографий не пустой
+                if (!post.getImagesUrls().isEmpty()) {
+                    // То загружаем изображения и добавляем их в DTO в формате Base64
+                    List<String> imagesBase64 = new ArrayList<>();
+                    for (String imageName : post.getImagesUrls()) {
+                        String base64Image = postsUtil.downloadAndEncodeImage(imageName);
+                        imagesBase64.add(base64Image);
+                    }
+                    post.setImagesBase64(imagesBase64);
+                }
+            }
+
+            return posts;
+        } catch (Exception e){
+            log.warn("Ошибка при получении постов по тэгам: {}: {}", tags, e.getMessage());
+            throw new RuntimeException("Ошибка при получении постов по тэгам " + tags + ": " + e.getMessage());
         }
     }
+
+    /// Получение постов по тексту
+    public List<PostDTO> getPostsByText(String text){
+        String url = REGISTRY_SERVICE_URL + "/api/posts/search-by-text?text=" + text;
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.set(HEADER_NAME, "Bearer " + jwtUtil.generateInterServiceJwt());
+
+        HttpEntity<Void> requestEntity = new HttpEntity<>(headers);
+
+        try{
+            ResponseEntity<List<PostDTO>> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    requestEntity,
+                    new ParameterizedTypeReference<>() {}
+            );
+
+            if(!response.getStatusCode().is2xxSuccessful()){
+                log.warn("Неуспешный ответ от registry-service при получении постов по тексту {}: {}", text, response.getStatusCode());
+                throw new RuntimeException("Неуспешный ответ от registry-service: " + response.getStatusCode());
+            }
+
+            List<PostDTO> posts = response.getBody();
+            if (posts == null) return Collections.emptyList();
+
+            for(PostDTO post : posts){
+                // Если список уникальных имен фотографий не пустой
+                if (!post.getImagesUrls().isEmpty()) {
+                    // То загружаем изображения и добавляем их в DTO в формате Base64
+                    List<String> imagesBase64 = new ArrayList<>();
+                    for (String imageName : post.getImagesUrls()) {
+                        String base64Image = postsUtil.downloadAndEncodeImage(imageName);
+                        imagesBase64.add(base64Image);
+                    }
+                    post.setImagesBase64(imagesBase64);
+                }
+            }
+
+            return posts;
+        } catch (Exception e){
+            log.warn("Ошибка при получении постов по тексту: {}: {}", text, e.getMessage());
+            throw new RuntimeException("Ошибка при получении постов по тексту " + text + ": " + e.getMessage());
+        }
+    }
+
 
 }

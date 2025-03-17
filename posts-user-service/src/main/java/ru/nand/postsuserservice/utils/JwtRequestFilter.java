@@ -4,6 +4,7 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -13,6 +14,7 @@ import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
+import ru.nand.postsuserservice.services.CheckSessionClient;
 import ru.nand.postsuserservice.services.TokenRefreshGrpcClient;
 
 import java.io.IOException;
@@ -20,15 +22,11 @@ import java.util.Collections;
 
 @Slf4j
 @Component
+@RequiredArgsConstructor
 public class JwtRequestFilter extends OncePerRequestFilter {
     private final JwtUtil jwtUtil;
     private final TokenRefreshGrpcClient tokenRefreshGrpcClient;
-
-    @Autowired
-    public JwtRequestFilter(JwtUtil jwtUtil, TokenRefreshGrpcClient tokenRefreshGrpcClient) {
-        this.jwtUtil = jwtUtil;
-        this.tokenRefreshGrpcClient = tokenRefreshGrpcClient;
-    }
+    private final CheckSessionClient sessionClient;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
@@ -36,23 +34,26 @@ public class JwtRequestFilter extends OncePerRequestFilter {
             String token = jwtUtil.resolveToken(request);
 
             if(token != null){
-                // Если токен скоро истечет
-                if(jwtUtil.isTokenExpiringSoon(token)){
-                    log.info("Токен скоро истечет, запрашиваем новый токен");
+                // Проверяем, истек ли токен
+                if (!jwtUtil.validateExpirationToken(token)) {
+                    log.info("Токен истек, запрашиваем новый токен");
                     String refreshedToken = tokenRefreshGrpcClient.refreshToken(token);
 
-                    // Обновляем токен
-                    if(refreshedToken != null){
+                    // Если токен успешно обновлен
+                    if (refreshedToken != null) {
                         log.info("Токен был успешно обновлен");
                         token = refreshedToken;
-                        // Устанавливаем обновленный токен в заголовок ответа
+                        // Устанавливаем новый токен в заголовок ответа
                         response.setHeader("Authorization", "Bearer " + token);
                     } else {
                         log.warn("Не удалось обновить токен");
+                        // Если токен не удалось обновить, завершаем запрос с ошибкой
+                        response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Токен истек и не может быть обновлен");
+                        return;
                     }
                 }
                 // Валидация токена и добавление текущего пользователя в КБ
-                if (jwtUtil.validateToken(token)) {
+                if (jwtUtil.validateToken(token) && sessionClient.isSessionActive(token)) {
                     String username = jwtUtil.extractUsername(token);
                     String role = jwtUtil.extractRole(token);
 

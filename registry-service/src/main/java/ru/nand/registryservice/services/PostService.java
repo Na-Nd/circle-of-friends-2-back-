@@ -2,27 +2,19 @@ package ru.nand.registryservice.services;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.api.RubySettingsOrBuilder;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
-import ru.nand.registryservice.entities.Comment;
-import ru.nand.registryservice.entities.DTO.CommentDTO;
-import ru.nand.registryservice.entities.DTO.NotificationDTO;
-import ru.nand.registryservice.entities.DTO.PostDTO;
+import ru.nand.registryservice.entities.DTO.*;
 import ru.nand.registryservice.entities.Post;
 import ru.nand.registryservice.entities.User;
-import ru.nand.registryservice.repositories.CommentRepository;
 import ru.nand.registryservice.repositories.PostRepository;
 import ru.nand.registryservice.repositories.UserRepository;
+import ru.nand.registryservice.utils.RegistryUtil;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -32,235 +24,221 @@ import java.util.stream.Collectors;
 public class PostService {
     private final PostRepository postRepository;
     private final UserRepository userRepository;
-    private final KafkaTemplate<String, String> kafkaTemplate;
-    private final CommentRepository commentRepository;
+    private final RegistryUtil registryUtil;
+    private final ObjectMapper objectMapper;
+    private final UserSessionService userSessionService;
 
+    /// Создание поста
     @Transactional
-    public void createPost(PostDTO postDTO) {
-        User author = userRepository.findByUsername(postDTO.getAuthor());
+    public void createPost(String requestMessage){
+        PostCreateDTO postCreateDTO;
+        try{
+            postCreateDTO = objectMapper.readValue(requestMessage, PostCreateDTO.class);
+        } catch (JsonProcessingException e) {
+            log.warn("Ошибка при десериализации данных: {}", e.getMessage());
+            throw new RuntimeException("Ошибка при десериализации данных: " + e.getMessage());
+        }
 
-        Post post = new Post();
-        post.setText(postDTO.getText());
-        post.setTags(postDTO.getTags());
-        post.setAuthor(author);
-        post.setDateOfPublication(LocalDateTime.now());
-        post.setDateOfUpdate(LocalDateTime.now());
-        post.setFilename(postDTO.getFilename());
+        User postAuthor = userRepository.findByUsername(postCreateDTO.getOwnerUsername())
+                .orElseThrow(() -> new RuntimeException("Автор поста не найден"));
+
+        Post post = Post.builder()
+                .text(postCreateDTO.getText())
+                .tags(postCreateDTO.getTags())
+                .author(postAuthor)
+                .dateOfPublication(LocalDateTime.now())
+                .dateOfUpdate(LocalDateTime.now())
+                .filenames(postCreateDTO.getImagesUrls())
+                .build();
 
         postRepository.save(post);
-        log.debug("Сохранил пост: {}", post);
+        log.debug("Сохранил пост автора: {}", postAuthor.getUsername());
 
-        Set<User> subscribers = author.getSubscribers();
-        for(User subscriber : subscribers) {
-            sendNotification(
+        // Отправка уведомлений подписчикам
+        for (User subscriber : postAuthor.getSubscribers()) {
+            registryUtil.sendNotification(
                     subscriber.getEmail(),
-                    author.getUsername(),
-                    "Посмотрите новый пост от " + author.getUsername()
+                    postAuthor.getUsername(),
+                    "Посмотрите новый пост от " + postAuthor.getUsername()
             );
         }
+
+        // Обновление последней активности автора
+        userSessionService.updateLastActivityTime(postAuthor);
     }
 
-    public PostDTO getPostById(int id) throws RuntimeException {
+    /// Получение поста по id
+    public String getPostById(int id){
         Post post = postRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Пост не найден"));
 
-        return new PostDTO(
-                post.getText(),
-                post.getTags(),
-                post.getAuthor().getUsername(),
-                post.getFilename(),
-                null,  // Base64 пока не используется
-                post.getLikes().size(),
-                post.getComments().size()
-        );
+        PostDTO postDTO = PostDTO.builder()
+                .postId(post.getId())
+                .ownerUsername(post.getAuthor().getUsername())
+                .text(post.getText())
+                .dateOfPublication(post.getDateOfPublication())
+                .tags(post.getTags())
+                .likes(post.getLikes().size())
+                .comments(post.getComments().size())
+                .imagesUrls(post.getFilenames())
+                .images(null)
+                .build();
+
+        try{
+            String responseMessage = objectMapper.writeValueAsString(postDTO);
+            return responseMessage;
+        } catch (JsonProcessingException e){
+            log.warn("Ошибка при сериализации PostDTO в JSON: {}", e.getMessage());
+            throw new RuntimeException("Ошибка сериализации PostDTO в JSON: " + e.getMessage());
+        }
+
     }
 
-    public List<PostDTO> getAllPosts() {
+    /// Удаление поста по id
+    @Transactional
+    public String deletePost(int id, String ownerUsername){
+        Post post = postRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Пост с id " + id + " не найден"));
+
+        if(!post.getAuthor().getUsername().equals(ownerUsername)){
+            throw new RuntimeException("Пользователь" + ownerUsername + " не может удалить чужой пост");
+        }
+
+        String responseMessage;
+        try{
+            responseMessage = objectMapper.writeValueAsString(post.getFilenames());
+        } catch (Exception e){
+            throw new RuntimeException("Ошибка сериализации сообщения ответа");
+        }
+
+        // Достаем пользователя для обновления последней активности
+        User user = post.getAuthor();
+        userSessionService.updateLastActivityTime(user);
+
+        log.debug("Пост с id {} удален", id);
+        postRepository.delete(post);
+
+        // Возвращаем список названий изображений для удаления
+        return responseMessage;
+    }
+
+    /// Редактирование поста по id (PUT)
+    @Transactional
+    public String updatePost(int postId, String requestMessage){
+        Post post = postRepository.findById(postId)
+                .orElseThrow(() -> new RuntimeException("Пост не найден"));
+
+        // Разбираем JSON в DTO
+        PostUpdateDTO postUpdateDTO;
+        try{
+            postUpdateDTO = objectMapper.readValue(requestMessage, PostUpdateDTO.class);
+        } catch (JsonProcessingException e) {
+            log.warn("Ошибка при десериализации данных : {}", e.getMessage());
+            throw new RuntimeException("Ошибка при десериализации данных: " + e.getMessage());
+        }
+
+        // Перезаписываем данные
+        post.setText(postUpdateDTO.getText());
+        post.setTags(postUpdateDTO.getTags());
+        post.setFilenames(postUpdateDTO.getImagesUrls());
+
+        // Достаем пользователя для обновления последней активности
+        User user = post.getAuthor();
+        userSessionService.updateLastActivityTime(user);
+
+        postRepository.save(post);
+
+        return "Пост успешно обновлен";
+    }
+
+    /// Получение всех постов
+    public List<PostDTO> getAllPosts(){
         return postRepository.findAll().stream()
                 .map(post -> new PostDTO(
-                        post.getText(),
-                        post.getTags(),
+                        post.getId(),
                         post.getAuthor().getUsername(),
-                        post.getFilename(),
-                        null,  // Base64 пока не используется
+                        post.getText(),
+                        post.getDateOfPublication(),
+                        post.getTags(),
                         post.getLikes().size(),
-                        post.getComments().size()
-                ))
-                .collect(Collectors.toList());
+                        post.getComments().size(),
+                        post.getFilenames(),
+                        null,
+                        null
+                )).collect(Collectors.toList());
     }
 
-    public List<PostDTO> getPostsByAuthor(String author) {
-        List<Post> posts = postRepository.findByAuthor(userRepository.findByUsername(author));
-        return posts.stream()
+    /// Получение постов конкретного пользователя
+    public List<PostDTO> getPostsByAuthor(String authorUsername){
+        return postRepository.findByAuthor(
+                userRepository.findByUsername(authorUsername).orElseThrow(()-> new RuntimeException("Пользователь не найден"))
+                ).stream()
                 .map(post -> new PostDTO(
+                        post.getId(),
+                        authorUsername,
                         post.getText(),
+                        post.getDateOfPublication(),
                         post.getTags(),
-                        post.getAuthor().getUsername(),
-                        post.getFilename(),
-                        null,  // Base64 пока не используется
                         post.getLikes().size(),
-                        post.getComments().size()
-                ))
-                .collect(Collectors.toList());
+                        post.getComments().size(),
+                        post.getFilenames(),
+                        null,
+                        null
+                )).collect(Collectors.toList());
     }
 
-    @Transactional
-    public void updatePost(int postId, PostDTO postDTO) throws RuntimeException{
-        Post existingPost = postRepository.findById(postId).orElseThrow(() -> new RuntimeException("Пост не найден"));
-
-        if(postDTO.getText() != null){
-            existingPost.setText(postDTO.getText());
-        }
-        if(postDTO.getTags() != null){
-            existingPost.setTags(postDTO.getTags());
-        }
-        if(postDTO.getFilename() != null){
-            existingPost.setFilename(postDTO.getFilename());
-        }
-
-        postRepository.save(existingPost);
-    }
-
-    public List<PostDTO> getPostsByTags(List<String> tags) {
-        return postRepository.findByTagsIn(tags, tags.size()).stream()
-                .map(post -> new PostDTO(
-                        post.getText(),
-                        post.getTags(),
-                        post.getAuthor().getUsername(),
-                        post.getFilename(),
-                        null,  // Base64 пока не используется
-                        post.getLikes().size(),
-                        post.getComments().size()
-                ))
-                .collect(Collectors.toList());
-    }
-
-    @Transactional
-    public void deletePost(int postId){
-        postRepository.deleteById(postId);
-    }
-
-    public List<PostDTO> getPostsByText(String text) {
-        return postRepository.findByTextStartingWith(text).stream()
-                .map(post -> new PostDTO(
-                        post.getText(),
-                        post.getTags(),
-                        post.getAuthor().getUsername(),
-                        post.getFilename(),
-                        null,  // Base64 пока не используется
-                        post.getLikes().size(),
-                        post.getComments().size()
-                ))
-                .collect(Collectors.toList());
-    }
-
-    public List<PostDTO> getSubscriptionPosts(String username){
-        User user = userRepository.findByUsername(username);
+    /// Получение постов подписок конкретного пользователя
+    public List<PostDTO> getSubscriptionsPosts(String username){
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new RuntimeException("Пользователь не найден"));
         Set<User> subscriptions = user.getSubscriptions();
 
         return postRepository.findByAuthorIn(subscriptions).stream()
                 .map(post -> new PostDTO(
-                        post.getText(),
-                        post.getTags(),
+                        post.getId(),
                         post.getAuthor().getUsername(),
-                        post.getFilename(),
-                        null,  // Base64 пока не используется
+                        post.getText(),
+                        post.getDateOfPublication(),
+                        post.getTags(),
                         post.getLikes().size(),
-                        post.getComments().size()
-                ))
-                .collect(Collectors.toList());
+                        post.getComments().size(),
+                        post.getFilenames(),
+                        null,
+                        null
+                )).collect(Collectors.toList());
     }
 
-    private void sendNotification(String targetUserEmail, String authorUsername, String notificationMessage){
-        NotificationDTO notificationDTO = new NotificationDTO();
-        notificationDTO.setUserEmail(targetUserEmail);
-        notificationDTO.setMessage(notificationMessage);
-
-        try{
-            String message = new ObjectMapper().writeValueAsString(notificationDTO);
-            kafkaTemplate.send("user-notifications-topic", message);
-            log.debug("Создано уведомление пользователю {} о новом посте автора {} и отправлено в брокер", targetUserEmail, authorUsername);
-        } catch (JsonProcessingException e) {
-            log.error("Ошибка при сериализации уведомления: {}", e.getMessage());
-        }
+    /// Получение постов по тэгам
+    public List<PostDTO> getPostsByTags(List<String> tags){
+        return postRepository.findByTagsIn(tags, tags.size()).stream()
+                .map(post -> new PostDTO(
+                        post.getId(),
+                        post.getAuthor().getUsername(),
+                        post.getText(),
+                        post.getDateOfPublication(),
+                        post.getTags(),
+                        post.getLikes().size(),
+                        post.getComments().size(),
+                        post.getFilenames(),
+                        null,
+                        null
+                )).collect(Collectors.toList());
     }
 
-    @Transactional
-    public void likePost(int postId, String username){
-        Post post = postRepository.findById(postId).orElseThrow(() -> new RuntimeException("Пост не найден"));
-        User user = userRepository.findByUsername(username);
-
-        post.getLikes().add(user);
-        postRepository.save(post);
-    }
-
-    @Transactional
-    public void unlikePost(int postId, String username) {
-        Post post = postRepository.findById(postId).orElseThrow(() -> new RuntimeException("Пост не найден"));
-        User user = userRepository.findByUsername(username);
-
-        post.getLikes().remove(user);
-        postRepository.save(post);
-    }
-
-    public int getLikesCount(int postId) {
-        Post post = postRepository.findById(postId).orElseThrow(() -> new RuntimeException("Пост не найден"));
-        return post.getLikes().size();
-    }
-
-    public List<String> getLikedUsers(int postId) {
-        Post post = postRepository.findById(postId).orElseThrow(() -> new RuntimeException("Пост не найден"));
-        return post.getLikes().stream().map(User::getUsername).collect(Collectors.toList());
-    }
-
-    @Transactional
-    public void addComment(int postId, CommentDTO commentDTO){
-        Post post = postRepository.findById(postId).orElseThrow(() -> new RuntimeException("Пост не найден"));
-        User user = userRepository.findByUsername(commentDTO.getUsername());
-
-        if(user == null) {
-            throw new RuntimeException("Пользователь не найден");
-        }
-
-        Comment comment = new Comment();
-        comment.setPost(post);
-        comment.setAuthor(user);
-        comment.setText(commentDTO.getText());
-        comment.setDateOfCreation(LocalDateTime.now());
-
-        commentRepository.save(comment);
-    }
-
-    @Transactional
-    public void editComment(int commentId, CommentDTO commentDTO){
-        Comment comment = commentRepository.findById(commentId).orElseThrow(() -> new RuntimeException("Комментарий не найден"));
-
-        if(!comment.getAuthor().getUsername().equals(commentDTO.getUsername())){
-            throw new RuntimeException("Доступ к редактированию чужого комментария запрещен");
-        }
-
-        comment.setText(commentDTO.getText());
-        commentRepository.save(comment);
-    }
-
-    @Transactional
-    public void deleteComment(int commentId, String username){
-        Comment comment = commentRepository.findById(commentId).orElseThrow(() -> new RuntimeException("Комментарий не найден"));
-
-        if(!comment.getAuthor().getUsername().equals(username)){
-            throw new RuntimeException("Доступ к удалению чужого комментария запрещен");
-        }
-
-        commentRepository.delete(comment);
-    }
-
-    public List<CommentDTO> getComments(int postId, int page, int size){
-        Pageable pageable = PageRequest.of(page, size);
-
-        return commentRepository.findByPostId(postId, pageable).stream()
-                .map(comment -> new CommentDTO(
-                        comment.getAuthor().getUsername(),
-                        comment.getText())
-                ).collect(Collectors.toList());
+    /// Получение поста по тексту
+    public List<PostDTO> getPostsByText(String text){
+        return postRepository.findByTextStartingWith(text).stream()
+                .map(post -> new PostDTO(
+                        post.getId(),
+                        post.getAuthor().getUsername(),
+                        post.getText(),
+                        post.getDateOfPublication(),
+                        post.getTags(),
+                        post.getLikes().size(),
+                        post.getComments().size(),
+                        post.getFilenames(),
+                        null,
+                        null
+                )).collect(Collectors.toList());
     }
 }

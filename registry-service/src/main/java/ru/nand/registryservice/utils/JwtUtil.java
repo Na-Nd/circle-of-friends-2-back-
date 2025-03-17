@@ -1,6 +1,7 @@
 package ru.nand.registryservice.utils;
 
 import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import jakarta.servlet.http.HttpServletRequest;
@@ -31,15 +32,11 @@ public class JwtUtil {
     @Value("${accountuserservice.jwt.secret}")
     private String serviceSecret;
 
-    @Value("${jwt.expiration}")
-    private long expiration;
+    @Value("${jwt.access.jwt.expiration}")
+    private long accessTokenExpiration;
 
-    private final UserService userService;
-
-    @Autowired
-    public JwtUtil(UserService userService) {
-        this.userService = userService;
-    }
+    @Value("${jwt.refresh.jwt.expiration}")
+    private long refreshTokenExpiration;
 
     private Key getSigningKey(){
         return Keys.hmacShaKeyFor(secretKey.getBytes());
@@ -49,21 +46,8 @@ public class JwtUtil {
         return Keys.hmacShaKeyFor(serviceSecret.getBytes());
     }
 
-    public String extractUsername(String token) {
-        return extractClaim(token, Claims::getSubject);
-    }
-
     public String extractServiceName(String token){
         return extractClaimFromInterServiceToken(token, Claims::getSubject);
-    }
-
-    public Date extractExpiration(String token) {
-        return extractClaim(token, Claims::getExpiration);
-    }
-
-    public <T> T extractClaim(String token, Function<Claims, T> claimsResolver) {
-        final Claims claims = extractAllClaims(token);
-        return claimsResolver.apply(claims);
     }
 
     public <T> T extractClaimFromInterServiceToken(String token, Function<Claims, T> claimsResolver) {
@@ -87,31 +71,43 @@ public class JwtUtil {
                 .getBody();
     }
 
-    private boolean isTokenExpired(String token) {
-        return extractExpiration(token).before(new Date());
-    }
-
-    public String generateToken(UserDetails userDetails) {
+    /// Генерация access токена
+    public String generateAccessToken(User user){
         Map<String, Object> claims = new HashMap<>();
-        User user = userService.findByUsername(userDetails.getUsername());
 
         claims.put("role", user.getRole().name());
         claims.put("email", user.getEmail());
-        return createToken(claims, userDetails.getUsername());
+        claims.put("token_type", "access");
+        claims.put("user_id", user.getId());
+
+        return createToken(claims, user.getUsername(), accessTokenExpiration);
     }
 
+    /// Генерация refresh токена
+    public String generateRefreshToken(User user){
+        Map<String, Object> claims = new HashMap<>();
 
-    private String createToken(Map<String, Object> claims, String subject) {
+        claims.put("role", user.getRole().name());
+        claims.put("email", user.getEmail());
+        claims.put("token_type", "refresh");
+        claims.put("user_id", user.getId());
+
+        return createToken(claims, user.getUsername(), refreshTokenExpiration);
+    }
+
+    /// Создание токена
+    private String createToken(Map<String, Object> claims, String subject, long expirationTime) {
         return Jwts.builder()
                 .setClaims(claims)
                 .setSubject(subject)
                 .setIssuedAt(new Date(System.currentTimeMillis()))
-                .setExpiration(new Date(System.currentTimeMillis() + expiration))
+                .setExpiration(new Date(System.currentTimeMillis() + expirationTime))
                 .signWith(getSigningKey())
                 .compact();
     }
 
-    public boolean validateToken(String token){
+    /// Валидация истечения токена
+    public boolean validateExpirationToken(String token) {
         try{
             Jwts.parserBuilder()
                     .setSigningKey(getSigningKey())
@@ -119,49 +115,29 @@ public class JwtUtil {
                     .parseClaimsJws(token);
 
             return true;
-        } catch (Exception e){
-            log.warn("Произошла ошибка валидации токена");
+        } catch (ExpiredJwtException e){
+            log.error("Ошибка валидации истечения токена: {}", e.getMessage());
             return false;
         }
     }
 
-    public Set<GrantedAuthority> extractAuthorities(String token) {
-        String role = extractClaim(token, claims -> claims.get("role", String.class));
-        return Collections.singleton(new SimpleGrantedAuthority(role));
-    }
-
-
-    public UsernamePasswordAuthenticationToken getAuthentication(String token, UserDetails userDetails) {
-        Set<GrantedAuthority> authorities = extractAuthorities(token);
-        return new UsernamePasswordAuthenticationToken(userDetails, null, authorities);
-    }
-
-    public String resolveToken(HttpServletRequest request) {
-        String bearerToken = request.getHeader("Authorization");
-        if (bearerToken != null && bearerToken.startsWith("Bearer ")) {
-            return bearerToken.substring(7);
-        }
-        return null;
-    }
-
+    /// Отсечение Bearer части межсервисного токена
     public String resolveInterServiceToken(HttpServletRequest request) {
         String bearer = request.getHeader(HEADER_NAME);
 
         if(bearer != null && bearer.startsWith("Bearer ")){
-            log.info("Bearer межсервисоного токена перед отсечением: {}", bearer);
+            log.debug("Bearer межсервисоного токена перед отсечением: {}", bearer);
             return bearer.substring(7);
         }
         return null;
     }
 
-    public String extractRole(String token) {
-        return extractClaim(token, claims -> claims.get("role", String.class));
-    }
-
+    /// Извлечение роли микросервиса из межсервисного токена
     public String extractRoleFromInterServiceJwt(String token){
         return extractClaimFromInterServiceToken(token, claims -> claims.get("service_role", String.class));
     }
 
+    /// Валидация межсервисного токена
     public boolean validateInterServiceJwt(String interServiceJwt) {
         try{
             Jwts.parserBuilder()

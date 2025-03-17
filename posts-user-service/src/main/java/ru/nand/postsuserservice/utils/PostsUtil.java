@@ -1,80 +1,103 @@
 package ru.nand.postsuserservice.utils;
 
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.RestTemplate;
 import org.springframework.web.multipart.MultipartFile;
+import ru.nand.postsuserservice.services.YandexDiskService;
 
-import java.io.File;
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Paths;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Base64;
+import java.util.List;
 import java.util.UUID;
 
 @Slf4j
 @Component
 public class PostsUtil {
-    @Value("${images.path}")
-    private String imagesDir;
+    private final YandexDiskService yandexDiskService;
+    private final RestTemplate restTemplate;
 
-    // Сохранение изображения
-    public String saveImage(MultipartFile imageFile) {
-        try {
-            File directory = new File(imagesDir);
-            if (!directory.exists() && !directory.mkdirs()) {
-                log.error("Не удалось создать каталог для изображений: {}", directory.getAbsolutePath());
-                throw new RuntimeException("Не удалось создать каталог для изображений");
-            }
-
-            String imageName = UUID.randomUUID().toString() + ".png";
-            File destination = new File(directory, imageName);
-            imageFile.transferTo(destination);
-            log.debug("Изображение сохранено как: {}", destination.getAbsolutePath());
-
-            return imageName;
-        } catch (IOException e) {
-            log.error("Ошибка при сохранении изображения: {}", e.getMessage());
-            throw new RuntimeException("Ошибка при сохранении изображения");
-        }
+    @Autowired
+    public PostsUtil(YandexDiskService yandexDiskService, RestTemplate restTemplate) {
+        this.yandexDiskService = yandexDiskService;
+        this.restTemplate = restTemplate;
     }
 
-    // Кодирование изображения в Base64
-    public String encodeImageToBase64(String filename) {
-        if (filename == null || filename.isEmpty()) return null;
+    /// Выдача уникальных названий и загрузка на диск
+    public List<String> uploadImages(List<MultipartFile> images){
+        List<String> uploadedImagesUrls = new ArrayList<>();
 
-        File imageFile = new File(imagesDir, filename);
-        if (!imageFile.exists()) {
-            log.warn("Изображение не найдено: {}", imageFile.getAbsolutePath());
-            return null;
+        for(MultipartFile image : images){
+            try{
+                // Делаем уникальное имя файлу
+                String uniqueFileName = generateUniqueFileName(image.getOriginalFilename());
+
+                // Кидаем на диск
+                yandexDiskService.upload(image.getInputStream(), "/imagesFolder/" + uniqueFileName);
+
+                // Сохраняем уникальное имя
+                uploadedImagesUrls.add(uniqueFileName);
+            } catch (IOException e) {
+                log.warn("Ошибка при загрузке файла: {}", e.getMessage());
+                throw new RuntimeException("Ошибка при загрузке файла: " + e.getMessage());
+            }
         }
 
-        try {
-            byte[] fileContent = Files.readAllBytes(imageFile.toPath());
-            return Base64.getEncoder().encodeToString(fileContent);
-        } catch (IOException e) {
-            log.error("Ошибка при чтении изображения: {}", e.getMessage());
-            return null;
-        }
+        log.debug("Выданы уникальные названия: {}", uploadedImagesUrls);
+        return uploadedImagesUrls;
     }
 
-    // Удаление изображения из папки
-    public boolean deleteImage(String filename){
-        if(filename == null || filename.isEmpty()) return false;
+    /// Генерация уникальных названий
+    public String generateUniqueFileName(String originalFilename) {
+        String fileExtension = originalFilename.substring(originalFilename.lastIndexOf("."));
 
-        File imageFile = new File(imagesDir, filename);
-        if(imageFile.exists()){
-            boolean isDeleted = imageFile.delete();
-            if(isDeleted){
-                log.debug("Изображени удалено: {}", imageFile.getAbsolutePath());
-            } else {
-                log.warn("Не удалось удалить изображение: {}", imageFile.getAbsolutePath());
-            }
+        String uniqueFileName = UUID.randomUUID() + fileExtension;
+        log.debug("Сгенерировано уникальное название файлу: {}", uniqueFileName);
+        return uniqueFileName;
+    }
 
-            return isDeleted;
-        } else {
-            log.warn("Изображение для удаления не найдено: {}", imageFile.getAbsolutePath());
-            return false;
+    /// Получение ссылки на скачивание
+    public String getDownloadLink(String path) throws IOException{
+        return yandexDiskService.download(path);
+    }
+
+    /// Загрузка изображения с Яндекс.Диска и кодирование в Base64
+    public String downloadAndEncodeImage(String imageName) throws IOException {
+        // Формируем путь к файлу на Яндекс.Диске
+        String path = "/imagesFolder/" + imageName;
+
+        // Получаем ссылку для скачивания
+        String downloadLink = getDownloadLink(path);
+
+        // Декодируем ссылку
+        String decodedLink = URLDecoder.decode(downloadLink, StandardCharsets.UTF_8);
+
+        // Загружаем файл по ссылке
+        byte[] imageBytes = downloadFile(decodedLink);
+
+        // Кодируем изображение в Base64
+        return Base64.getEncoder().encodeToString(imageBytes);
+    }
+
+    /// Скачивание файла
+    public byte[] downloadFile(String downloadLink) throws IOException {
+        ResponseEntity<byte[]> response = restTemplate.getForEntity(downloadLink, byte[].class);
+
+        if (!response.getStatusCode().is2xxSuccessful()) {
+            log.warn("Ошибка при скачивании файла по ссылке: {}", response.getStatusCode());
+            throw new IOException("Ошибка скачивания файла: " + response.getStatusCode());
         }
+        return response.getBody();
+    }
+
+    /// Удаление файла с Яндекс.Диска
+    public void deleteFile(String path) throws IOException {
+        yandexDiskService.deleteFile(path);
+        log.debug("Файл {} удален с диска", path);
     }
 }

@@ -6,53 +6,63 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
-import ru.nand.postsuserservice.services.PostsService;
+import ru.nand.postsuserservice.entities.DTO.CommentDTO;
+import ru.nand.postsuserservice.entities.requests.CommentRequest;
+import ru.nand.postsuserservice.services.PostsCommentsService;
+
+import java.util.ArrayList;
+import java.util.List;
 
 @Slf4j
 @RestController
 @RequestMapping("/posts")
 public class PostsCommentsController {
-    private final PostsService postsService;
+    private final PostsCommentsService postsCommentsService;
 
     @Autowired
-    public PostsCommentsController(PostsService postsService) {
-        this.postsService = postsService;
+    public PostsCommentsController(PostsCommentsService postsCommentsService) {
+        this.postsCommentsService = postsCommentsService;
     }
 
     /// Добавление комментария к посту
     @PostMapping("/{postId}/comments")
     public ResponseEntity<String> addComment(
             @PathVariable int postId,
-            @RequestParam String text,
+            @RequestBody CommentRequest comment,
             @AuthenticationPrincipal UserDetails userDetails
     ) {
         try{
-            postsService.addComment(postId, userDetails.getUsername(), text);
-            return ResponseEntity.status(200).body("Комментарий добавлен");
+            log.info("Пользовательский запрос на добавление комментария к посту с id {}", postId);
+            return ResponseEntity.status(200).body(postsCommentsService.addComment(postId, comment, userDetails.getUsername()));
         } catch (Exception e){
-            log.error("Ошибка при добавления комментария: {}", e.getMessage());
-            return ResponseEntity.status(500).body("Внутренняя ошибка сервера");
+            log.error(e.getMessage());
+            return ResponseEntity.status(400).body("Ошибка при добавлении комментария");
         }
     }
 
-    /// Редактирование комментария
-    @PatchMapping("/{postId}/comments/{commentId}")
-    public ResponseEntity<String> editComment(
+    /// Редактирование комментария по id
+    @PutMapping("/{postId}/comments/{commentId}")
+    public ResponseEntity<String> updateComment(
             @PathVariable int postId,
             @PathVariable int commentId,
-            @RequestParam String newText,
+            @RequestBody CommentRequest commentRequest,
             @AuthenticationPrincipal UserDetails userDetails
-    ){
+    ) {
         try{
-            postsService.editComment(postId, commentId, userDetails.getUsername(), newText);
-            return ResponseEntity.status(200).body("Комментарий обновлен");
+            log.info("Пользовательский запрос на редактирование комментария к посту с id {}", postId);
+            return ResponseEntity.status(200).body(postsCommentsService.updateComment(
+                    postId,
+                    commentId,
+                    commentRequest,
+                    userDetails.getUsername())
+            );
         } catch (Exception e){
-            log.error("Ошибка при редактировании поста: {}", e.getMessage());
-            return ResponseEntity.status(500).body("Внутренняя ошибка сервера");
+            log.error(e.getMessage());
+            return ResponseEntity.status(400).body("Ошибка при редактировании комментария");
         }
     }
 
-    /// Удаление комментария
+    /// Удаление комментария по id
     @DeleteMapping("/{postId}/comments/{commentId}")
     public ResponseEntity<String> deleteComment(
             @PathVariable int postId,
@@ -60,26 +70,23 @@ public class PostsCommentsController {
             @AuthenticationPrincipal UserDetails userDetails
     ) {
         try{
-            postsService.deleteComment(postId, commentId, userDetails.getUsername());
-            return ResponseEntity.status(200).body("Комментарий удален");
+            log.info("Пользовательский запрос на удаления комментария поста с id {}", postId);
+            return ResponseEntity.status(200).body(postsCommentsService.deleteComment(postId, commentId, userDetails.getUsername()));
         } catch (Exception e){
-            log.error("Ошибка при удалении комментария: {}", e.getMessage());
-            return ResponseEntity.status(500).body("Внутренняя ошибка сервера");
+            log.info(e.getMessage());
+            return ResponseEntity.status(500).body("Ошибка удаления комментария");
         }
     }
 
-    /// Получить комментарии к посту (с пагинацией, так как комментариев может быть много)
+    /// Получение всех комментариев поста
     @GetMapping("/{postId}/comments")
-    public ResponseEntity<?> getComments(
-            @PathVariable int postId,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size
-    ) {
-        try {
-            return ResponseEntity.status(200).body(postsService.getComments(postId, page, size));
+    public ResponseEntity<List<CommentDTO>> getPostComments(@PathVariable int postId){
+        try{
+            log.info("Пользовательский запрос на получение комментариев к посту id {}", postId);
+            return ResponseEntity.status(200).body(postsCommentsService.getPostComments(postId));
         } catch (Exception e){
-            log.error("Ошибка при получении комментариев: {}", e.getMessage());
-            return ResponseEntity.status(500).body("Внутренняя ошибка сервера");
+            log.error(e.getMessage());
+            return ResponseEntity.status(404).body(null);
         }
     }
 }

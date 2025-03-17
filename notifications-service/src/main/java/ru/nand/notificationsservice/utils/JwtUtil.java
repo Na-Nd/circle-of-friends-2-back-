@@ -1,6 +1,7 @@
 package ru.nand.notificationsservice.utils;
 
 import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import jakarta.servlet.http.HttpServletRequest;
@@ -63,11 +64,6 @@ public class JwtUtil {
         return claimsResolver.apply(claims);
     }
 
-    // Извлечь дату истечения
-    public Date extractExpiration(String token) {
-        return extractClaim(token, Claims::getExpiration);
-    }
-
     // Получить все данные из токена
     private Claims extractAllClaims(String token) {
         try{
@@ -82,7 +78,22 @@ public class JwtUtil {
         }
     }
 
-    // Валидация токена
+    /// Валидация истечения токена
+    public boolean validateExpirationToken(String token) {
+        try{
+            Jwts.parserBuilder()
+                    .setSigningKey(getSigningKey())
+                    .build()
+                    .parseClaimsJws(token);
+
+            return true;
+        } catch (ExpiredJwtException e){
+            log.error("Ошибка валидации истечения токена: {}", e.getMessage());
+            return false;
+        }
+    }
+
+    /// Валидация токена
     public boolean validateToken(String token) {
         try{
             Jwts.parserBuilder()
@@ -97,14 +108,7 @@ public class JwtUtil {
         }
     }
 
-    // Токен скоро истекает
-    public boolean isTokenExpiringSoon(String token) {
-        Date expirationDate = extractExpiration(token);
-        long timeLeft = expirationDate.getTime() - System.currentTimeMillis();
-        return timeLeft <= 240 * 1000; // Проверка, осталось меньше 5 минут
-    }
-
-    // Отсечь Bearer_
+    /// Отсечь Bearer_
     public String resolveToken(HttpServletRequest request) {
         String bearer = request.getHeader("Authorization");
         if(bearer != null && bearer.startsWith("Bearer ")){
@@ -113,7 +117,7 @@ public class JwtUtil {
         return null;
     }
 
-    // Генерация межсервисного JWT
+    /// Генерация межсервисного JWT
     public String generateInterServiceJwt(){
         Map<String, Object> claims = new HashMap<>();
         claims.put("service_role", "ROLE_SERVICE");
@@ -121,7 +125,7 @@ public class JwtUtil {
         return createInterServiceToken(claims);
     }
 
-    // Создание межсервисного JWT
+    /// Создание межсервисного JWT
     private String createInterServiceToken(Map<String, Object> claims) {
         return Jwts.builder()
                 .setClaims(claims)

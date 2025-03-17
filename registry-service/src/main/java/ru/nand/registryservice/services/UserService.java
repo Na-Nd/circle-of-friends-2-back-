@@ -1,99 +1,143 @@
 package ru.nand.registryservice.services;
 
-import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.security.Keys;
 import jakarta.transaction.Transactional;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import ru.nand.registryservice.entities.DTO.UserDTO;
+import ru.nand.registryservice.entities.ENUMS.ROLE;
+import ru.nand.registryservice.entities.ENUMS.STATUS;
 import ru.nand.registryservice.entities.User;
 import ru.nand.registryservice.entities.DTO.AccountPatchDTO;
+import ru.nand.registryservice.entities.DTO.RegisterDTO;
+import ru.nand.registryservice.entities.UserSession;
 import ru.nand.registryservice.repositories.UserRepository;
+import ru.nand.registryservice.utils.JwtUtil;
 
-import java.security.Key;
-import java.security.PublicKey;
-import java.util.Date;
-import java.util.HashMap;
+import java.time.Duration;
+import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Map;
 
 @Slf4j
 @Service
+@RequiredArgsConstructor
 public class UserService implements UserDetailsService {
     private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
+    private final JwtUtil jwtUtil;
+    private final UserSessionService userSessionService;
 
-    @Value("${jwt.expiration}")
-    private long expiration;
+    @Value("${jwt.access.jwt.expiration}")
+    private long accessTokenExpiration;
 
-    @Value("${jwt.secret}")
-    private String secretKey;
+    @Value("${jwt.refresh.jwt.expiration}")
+    private long refreshTokenExpiration;
 
-    @Autowired
-    public UserService(UserRepository userRepository) {
-        this.userRepository = userRepository;
-    }
+    public UserSession registerUser(RegisterDTO registerDTO) {
+        // Проверяем, существует ли пользователь с таким email или username
+        if (userRepository.findByEmail(registerDTO.getEmail()).isPresent()) {
+            throw new RuntimeException("Пользователь с таким email уже существует");
+        }
+        if (userRepository.findByUsername(registerDTO.getUsername()).isPresent()) {
+            throw new RuntimeException("Пользователь с таким username уже существует");
+        }
 
-    public void save(User user) {
-        log.debug("Сохраняем пользователя в БД: {}", user);
+        // Создаем нового пользователя
+        User user = User.builder()
+                .username(registerDTO.getUsername())
+                .email(registerDTO.getEmail())
+                .password(passwordEncoder.encode(registerDTO.getPassword()))
+                .registrationDate(LocalDateTime.now())
+                .role(ROLE.ROLE_USER)
+                .build();
+
+        // Сохраняем пользователя
         userRepository.save(user);
+        log.debug("Зарегистрирован и сохранен пользователь: {}", registerDTO.getUsername());
+
+        // Создаем сессию для нового пользователя
+        return userSessionService.createSession(user);
     }
 
-    public User findByUsername(String username) {
-        return userRepository.findByUsername(username);
+    public UserSession authenticateUser(String username, String password) {
+        // Поиск пользователя по имени
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new RuntimeException("Пользователь не найден"));
+
+        // Проверка пароля
+        if (!passwordEncoder.matches(password, user.getPassword())) {
+            throw new RuntimeException("Неверный пароль");
+        }
+
+        // Если пользователь найден и пароль совпал
+        log.info("Пользователь {} успешно аутентифицирован", username);
+
+        // Создаем новую сессию для пользователя
+        return userSessionService.createSession(user);
     }
 
-    public User findByEmail(String email) {
-        return userRepository.findByEmail(email);
+    public void logoutUser(String accessToken){
+        try{
+            userSessionService.deactivateSessionByAccessToken(accessToken);
+            log.debug("Пользователь успешно вышел из системы");
+        } catch (Exception e){
+            log.error("Ошибка при выходе из системы: {}", e.getMessage());
+            throw new RuntimeException("Ошибка при выходе из системы: " + e.getMessage());
+        }
     }
 
     @Override
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
-        User user = userRepository.findByUsername(username);
-        if (user == null) {
-            throw new UsernameNotFoundException("Пользователь с именем " + username + " не найден");
-        }
-        return user;
+        return userRepository.findByUsername(username)
+                .orElseThrow(() -> new UsernameNotFoundException("Пользователь с именем " + username + " не найден"));
     }
 
     public int getFollowersCount(String username) {
-        User user = userRepository.findByUsername(username);
-        if (user == null) {
-            throw new RuntimeException("Пользователь с именем " + username + " не найден");
-        }
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new RuntimeException("Пользователь с именем " + username + " не найден"));
         return user.getSubscribers().size();
     }
 
+    public UserDTO getUserByUsername(String username){
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new RuntimeException("Пользователь не найден"));
+
+        return UserDTO.builder()
+                .id(user.getId())
+                .username(user.getUsername())
+                .email(user.getEmail())
+                .subscribersCount(user.getSubscribers().size())
+                .subscriptionsCount(user.getSubscriptions().size())
+                .postsCount(user.getPosts().size())
+                .build();
+    }
+
     public List<String> getFollowers(String username) {
-        User user = userRepository.findByUsername(username);
-        if (user == null) {
-            throw new RuntimeException("Пользователь с именем " + username + " не найден");
-        }
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new RuntimeException("Пользователь с именем " + username + " не найден"));
         return user.getSubscribers().stream()
                 .map(User::getUsername)
                 .toList();
     }
 
     public List<String> getFollowing(String username) {
-        User user = userRepository.findByUsername(username);
-        if (user == null) {
-            throw new RuntimeException("Пользователь с именем " + username + " не найден");
-        }
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new RuntimeException("Пользователь с именем " + username + " не найден"));
         return user.getSubscriptions().stream()
                 .map(User::getUsername)
                 .toList();
     }
 
-    public void followUser(String currentUsername, String targetUsername) {
-        User currentUser = userRepository.findByUsername(currentUsername);
-        User targetUser = userRepository.findByUsername(targetUsername);
-
-        if (currentUser == null || targetUser == null) {
-            throw new RuntimeException("Один из пользователей не найден");
-        }
+    public String followUser(String currentUsername, String targetUsername) {
+        User currentUser = userRepository.findByUsername(currentUsername)
+                .orElseThrow(() -> new RuntimeException("Пользователь " + currentUsername + " не найден"));
+        User targetUser = userRepository.findByUsername(targetUsername)
+                .orElseThrow(() -> new RuntimeException("Пользователь " + targetUsername + " не найден"));
 
         if (currentUser.getSubscriptions().contains(targetUser)) {
             throw new RuntimeException("Пользователь уже подписан");
@@ -104,17 +148,18 @@ public class UserService implements UserDetailsService {
 
         userRepository.save(currentUser);
         userRepository.save(targetUser);
+
         log.debug("Пользователь {} подписался на {}", currentUsername, targetUsername);
+
+        return targetUser.getEmail();
     }
 
     @Transactional
-    public void unfollowUser(String currentUsername, String targetUsername){
-        User currentUser = userRepository.findByUsername(currentUsername);
-        User targetUser = userRepository.findByUsername(targetUsername);
-
-        if(targetUser == null){
-            throw new RuntimeException("Целевой пользователь не найден");
-        }
+    public void unfollowUser(String currentUsername, String targetUsername) {
+        User currentUser = userRepository.findByUsername(currentUsername)
+                .orElseThrow(() -> new RuntimeException("Пользователь " + currentUsername + " не найден"));
+        User targetUser = userRepository.findByUsername(targetUsername)
+                .orElseThrow(() -> new RuntimeException("Пользователь " + targetUsername + " не найден"));
 
         if (!currentUser.getSubscriptions().contains(targetUser)) {
             throw new RuntimeException("Пользователь не подписан");
@@ -135,68 +180,66 @@ public class UserService implements UserDetailsService {
                 .toList();
     }
 
-    // Обновляем данные пользователя
-    public String updateUser(AccountPatchDTO accountPatchDTO) throws RuntimeException {
-        User user = userRepository.findByUsername(accountPatchDTO.getFirstUsername());
-        if (user == null) {
-            throw new RuntimeException("Пользователь не найден");
-        }
+    @Transactional
+    public String updateUser(AccountPatchDTO accountPatchDTO) {
+        User user = userRepository.findByUsername(accountPatchDTO.getFirstUsername())
+                .orElseThrow(() -> new RuntimeException("Пользователь не найден"));
 
+        // Обновить username, если он был изменен и не занят
         if (accountPatchDTO.getUsername() != null && !accountPatchDTO.getUsername().equals(user.getUsername())) {
-            if (userRepository.findByUsername(accountPatchDTO.getUsername()) != null) {
+            if (userRepository.findByUsername(accountPatchDTO.getUsername()).isPresent()) {
                 throw new RuntimeException("Username уже используется");
             }
             user.setUsername(accountPatchDTO.getUsername());
         }
 
+        // Обновить email, если он был изменен и не занят
         if (accountPatchDTO.getEmail() != null && !accountPatchDTO.getEmail().equals(user.getEmail())) {
-            if (userRepository.findByEmail(accountPatchDTO.getEmail()) != null) {
+            if (userRepository.findByEmail(accountPatchDTO.getEmail()).isPresent()) {
                 throw new RuntimeException("Email уже используется");
             }
             user.setEmail(accountPatchDTO.getEmail());
         }
 
         if (accountPatchDTO.getPassword() != null) {
-            user.setPassword(accountPatchDTO.getPassword());
+            user.setPassword(passwordEncoder.encode(accountPatchDTO.getPassword()));
         }
-
-        // без jwtUtil чтобы не было цикличной зависимости, так как в jwtUtil используется UserService
-        String newJwt = generateToken(user);
 
         userRepository.save(user);
         log.debug("Данные пользователя обновлены: {}", user);
 
-        return newJwt;
+        // Находим активную сессию пользователя
+        List<UserSession> activeSessions = userSessionService.findByUserAndStatus(user, STATUS.ACTIVE);
+        if (activeSessions.isEmpty()) {
+            throw new RuntimeException("Активная сессия не найдена");
+        }
+
+        UserSession session = activeSessions.getFirst();
+
+        String newAccessToken = jwtUtil.generateAccessToken(user);
+        String newRefreshToken = jwtUtil.generateRefreshToken(user);
+
+        // Обновляем сессию с новыми токенами
+        session.setAccessToken(newAccessToken);
+        session.setRefreshToken(newRefreshToken);
+        session.setAccessTokenExpires(LocalDateTime.now().plus(Duration.ofMillis(accessTokenExpiration)));
+        session.setRefreshTokenExpires(LocalDateTime.now().plus(Duration.ofMillis(refreshTokenExpiration)));
+        session.setLastActivityTime(LocalDateTime.now());
+
+        userSessionService.save(session);
+
+        log.debug("Сессия пользователя обновлена с новыми токенами: {}", user.getUsername());
+
+        return newAccessToken;
     }
 
     public void deleteUser(String username) {
         userRepository.deleteByUsername(username);
     }
 
-
-
-
-    // Чтобы избежать цикла
-    public String generateToken(UserDetails userDetails) {
-        Map<String, Object> claims = new HashMap<>();
-        User user = userRepository.findByUsername(userDetails.getUsername());
-
-        claims.put("role", user.getRole().name());
-        return createToken(claims, userDetails.getUsername());
-    }
-
-    private String createToken(Map<String, Object> claims, String subject) {
-        return Jwts.builder()
-                .setClaims(claims)
-                .setSubject(subject)
-                .setIssuedAt(new Date(System.currentTimeMillis()))
-                .setExpiration(new Date(System.currentTimeMillis() + expiration))
-                .signWith(getSigningKey())
-                .compact();
-    }
-
-    private Key getSigningKey(){
-        return Keys.hmacShaKeyFor(secretKey.getBytes());
+    public String existsById(int userId) {
+        return userRepository.findById(userId).
+                orElseThrow(()-> new RuntimeException("Пользователь не найден"))
+                .getEmail();
     }
 }
-
