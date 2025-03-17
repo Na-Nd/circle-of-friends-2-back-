@@ -1,27 +1,25 @@
 package ru.nand.postsuserservice.entities.DTO;
+
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Set;
 
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
 public class PostDTO {
+    private int postId;
+    private String ownerUsername;
     private String text;
+    private LocalDateTime dateOfPublication;
     private Set<String> tags;
-    private String author;
-    private String filename;
-    private String imageBase64;
-
-    @Override
-    public String toString() {
-        return "PostDTO{" +
-                "text='" + text + '\'' +
-                ", tags=" + tags +
-                ", author='" + author + '\'' +
-                ", filename='" + filename + '\'' +
-                '}';
-    }
+    private int likes;
+    private int comments;
+    private List<String> imagesUrls;
+    private List<byte[]> images;
+    private List<String> imagesBase64;
 }

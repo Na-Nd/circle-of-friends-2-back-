@@ -1,0 +1,45 @@
+spring:
+  application:
+    name: auth-service
+  mail:
+    host: ${MAIL_HOST}
+    port: ${MAIL_PORT}
+    username: ${MAIL_USERNAME}
+    password: ${MAIL_PASSWORD}
+    properties:
+      mail:
+        smtp:
+          starttls:
+            enable: true
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
+server:
+  port: 8080
+
+service:
+  jwt:
+    secret: ${SERVICE_JWT_SECRET}
+
+jwt:
+  secret: ${JWT_SECRET}
+  expiration: ${JWT_EXPIRATION}
+  access:
+    expiration: ${ACCESS_JWT_EXPIRATION}
+  refresh:
+    expiration: ${REFRESH_JWT_EXPIRATION}
+
+interservice:
+  secret:
+    key: ${INTERSERVICE_SECRET_KEY}
+  header:
+    name: ${INTERSERVICE_HEADER_NAME}
+
+registry:
+  service:
+    url: ${REGISTRY_SERVICE_URL}
+
+myplug: ${TOKEN_PLUG}
+mysecret: ${MY_SECRET}

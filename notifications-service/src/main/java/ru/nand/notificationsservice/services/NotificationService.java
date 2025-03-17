@@ -2,49 +2,64 @@ package ru.nand.notificationsservice.services;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpMethod;
-import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestTemplate;
 import ru.nand.notificationsservice.entities.DTO.NotificationDTO;
 import ru.nand.notificationsservice.entities.Notification;
+import ru.nand.notificationsservice.entities.NotificationKey;
+import ru.nand.notificationsservice.repositories.NotificationRepository;
 import ru.nand.notificationsservice.utils.JwtUtil;
 
-import java.util.Arrays;
+import java.time.LocalDateTime;
 import java.util.List;
+import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
 public class NotificationService {
-
-    @Value("${interservice.header.name}")
-    private String HEADER_NAME;
-
-    @Value("${registry.service.url}")
-    private String REGISTRY_SERVICE_URL;
-
     private final JwtUtil jwtUtil;
-    private final RestTemplate restTemplate;
+    private final NotificationRepository notificationRepository;
 
     @Autowired
-    public NotificationService(JwtUtil jwtUtil, RestTemplate restTemplate) {
+    public NotificationService(JwtUtil jwtUtil, NotificationRepository notificationRepository) {
         this.jwtUtil = jwtUtil;
-        this.restTemplate = restTemplate;
+        this.notificationRepository = notificationRepository;
     }
 
+    public void saveNotification(NotificationDTO notificationDTO) {
+        Notification notification = Notification.builder()
+                .key(new NotificationKey(notificationDTO.getUserEmail(), UUID.randomUUID()))
+                .message(notificationDTO.getMessage())
+                .ownerUsername(notificationDTO.getOwnerUsername())
+                .creationDate(LocalDateTime.now())
+                .build();
 
-    public List<NotificationDTO> getAllNotificationsForCurrentUser(String username) {
-        String url = REGISTRY_SERVICE_URL + "/api/notifications?username=" + username;
+        log.debug("Сохранил уведомление: {}", notification);
+        notificationRepository.save(notification);
+    }
 
-        HttpHeaders headers = new HttpHeaders();
-        headers.set(HEADER_NAME, "Bearer " + jwtUtil.generateInterServiceJwt());
+    public List<NotificationDTO> getAllNotificationsForCurrentUser(String accessToken){
+        String userEmail = jwtUtil.extractEmail(accessToken);
+        log.debug("Извлек почту: {}", userEmail);
 
-        HttpEntity<Void> entity = new HttpEntity<>(headers);
+        return notificationRepository.findByKeyUserEmail(userEmail).stream()
+                .map(notification -> new NotificationDTO(
+                        notification.getKey().getUserEmail(),
+                        notification.getMessage(),
+                        notification.getOwnerUsername(),
+                        notification.getCreationDate()
+                ))
+                .collect(Collectors.toList());
 
-        ResponseEntity<NotificationDTO[]> response = restTemplate.exchange(url, HttpMethod.GET, entity, NotificationDTO[].class);
-        return Arrays.asList(response.getBody());
+    }
+
+    public long clearOldNotifications(){
+        // Получаем старые уведомления, порог - неделя
+        List<Notification> oldNotifications = notificationRepository.findOldNotifications(LocalDateTime.now().minusDays(7));
+        log.debug("Найдено старых уведомлений: {}", oldNotifications.size());
+
+        notificationRepository.deleteAll(oldNotifications);
+
+        return oldNotifications.size();
     }
 }

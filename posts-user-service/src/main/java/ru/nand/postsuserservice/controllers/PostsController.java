@@ -1,25 +1,28 @@
 package ru.nand.postsuserservice.controllers;
 
+import com.google.common.net.HttpHeaders;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.io.InputStreamResource;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.multipart.MultipartFile;
 import ru.nand.postsuserservice.entities.DTO.PostDTO;
 import ru.nand.postsuserservice.entities.requests.PostRequest;
-import ru.nand.postsuserservice.entities.requests.PostUpdateRequest;
 import ru.nand.postsuserservice.services.PostsService;
 
-import java.util.Collections;
+import java.io.ByteArrayInputStream;
+import java.net.URLConnection;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
 
 @Slf4j
 @RestController
 @RequestMapping("/posts")
 public class PostsController {
+
     private final PostsService postsService;
 
     @Autowired
@@ -27,123 +30,160 @@ public class PostsController {
         this.postsService = postsService;
     }
 
-    // Создание поста
-    @PostMapping
-    public ResponseEntity<String> createPost(
-            @RequestParam("text") String text,
-            @RequestParam("tags") Set<String> tags,
-            @RequestParam("image") MultipartFile image,
-            @AuthenticationPrincipal UserDetails userDetails
-    ) {
+    /// Создание поста
+    @PostMapping("/create")
+    public ResponseEntity<?> createPost(@ModelAttribute PostRequest postRequest, @AuthenticationPrincipal UserDetails userDetails) {
         try {
-            PostRequest postRequest = new PostRequest(text, tags, userDetails.getUsername(), image);
-            String imageName = postsService.createPost(postRequest);
-            return ResponseEntity.status(200).body("Пост успешно создан с изображением: " + imageName);
+            log.info("Пользовательский запрос на создание поста");
+            if (postRequest.getImages() == null) {
+                postRequest.setImages(new ArrayList<>());
+            }
+
+            return ResponseEntity.status(200).body(postsService.createPost(postRequest, userDetails.getUsername()));
         } catch (Exception e) {
             log.error(e.getMessage());
             return ResponseEntity.status(500).body("Ошибка при создании поста");
         }
     }
 
-    /// Получить все посты
-    @GetMapping
-    public ResponseEntity<?> getAllPosts(){
-        try{
-            return ResponseEntity.status(200).body(postsService.getAllPosts());
-        } catch (Exception e){
-            log.error("Ошибка получения всех постов: {}", e.getMessage());
-            return ResponseEntity.status(500).body("Внутренняя ошибка сервера");
-        }
-    }
-
-    /// Получить конкретный пост
+    /// Получение поста по id (изображение base64)
     @GetMapping("/id/{postId}")
     public ResponseEntity<?> getPostById(@PathVariable int postId) {
-        try{
+        try {
+            log.info("Пользовательский запрос на получение поста с id: {}", postId);
             return ResponseEntity.status(200).body(postsService.getPostById(postId));
-        } catch (RuntimeException e){
-            log.error("Ошибка при получении поста: {}", e.getMessage());
-            return ResponseEntity.status(500).body("Внутренняя ошибка сервера");
+        } catch (Exception e) {
+            log.error(e.getMessage());
+            return ResponseEntity.status(404).body("Пост не найден");
         }
     }
 
-    @PatchMapping("/{postId}")
+    /// Получение изображения поста по id как бинарный файл
+    @GetMapping("/id/{postId}/binImg")
+    public ResponseEntity<?> getPostImgById(@PathVariable int postId) {
+        try {
+            log.info("Пользовательский запрос на получение изображения поста с id: {}", postId);
+            PostDTO postDTO = postsService.getPostById(postId);
+
+            // Если есть фотографии
+            if (postDTO.getImages() != null && !postDTO.getImages().isEmpty()) {
+                // Возвращаем первое изображение
+                byte[] imageBytes = postDTO.getImages().getFirst();
+                String contentType = URLConnection.guessContentTypeFromName(postDTO.getImagesUrls().getFirst());
+
+                return ResponseEntity.status(200)
+                        .contentType(MediaType.parseMediaType(contentType))
+                        .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + postDTO.getImagesUrls().getFirst() + "\"")
+                        .body(new InputStreamResource(new ByteArrayInputStream(imageBytes)));
+            } else { // Если изображений нет, вернем просто DTO
+                return ResponseEntity.status(200).body(postDTO);
+            }
+        } catch (Exception e) {
+            log.error(e.getMessage());
+            return ResponseEntity.status(404).body("Пост не найден");
+        }
+    }
+
+    /// Удаление поста
+    @DeleteMapping("/id/{postId}")
+    public ResponseEntity<?> deletePostById(@PathVariable int postId, @AuthenticationPrincipal UserDetails userDetails) {
+        try{
+            log.info("Пользовательский запрос на удаление поста с id: {}", postId);
+            return ResponseEntity.status(200).body(postsService.deletePostById(postId, userDetails.getUsername()));
+        } catch (Exception e){
+            log.error(e.getMessage());
+            return ResponseEntity.status(500).body("Ошибка удаления поста");
+        }
+    }
+
+    /// Редактирование своего поста
+    @PutMapping("/id/{postId}")
     public ResponseEntity<String> updatePost(
             @PathVariable int postId,
-            @ModelAttribute PostUpdateRequest postUpdateRequest,
+            @ModelAttribute PostRequest postRequest,
             @AuthenticationPrincipal UserDetails userDetails
     ){
         try{
-            postsService.updatePost(postId, postUpdateRequest, userDetails);
-            return ResponseEntity.status(200).body("Пост успешно обновлен");
-        } catch (RuntimeException e){
-            log.error("Ошибка при обновлении поста с id {}: {}", postId, e.getMessage());
-            return ResponseEntity.status(500).body("Внутренняя ошибка сервера");
+            log.info("Пользовательский запрос на редактирование поста с id: {}", postId);
+            if (postRequest.getImages() == null) {
+                postRequest.setImages(new ArrayList<>());
+            }
+
+            return ResponseEntity.status(200).body(postsService.updatePost(postId, postRequest, userDetails.getUsername()));
+        } catch (Exception e){
+            log.error(e.getMessage());
+            return ResponseEntity.status(500).body("Ошибка редактирования поста");
         }
     }
 
-    @DeleteMapping("/{postId}")
-    public ResponseEntity<String> deletePost(
-            @PathVariable int postId,
-            @AuthenticationPrincipal UserDetails userDetails
-    ) {
+    /// Получение всех постов
+    @GetMapping()
+    public ResponseEntity<?> getAllPosts(){
         try{
-            postsService.deletePost(postId, userDetails);
-            return ResponseEntity.status(200).body("Пост успешно удален");
-        } catch (RuntimeException e){
-            log.error("Ошибка при удалении поста: {}", e.getMessage());
-            return ResponseEntity.status(500).body("Внутренняя ошибка сервера");
+            log.info("Пользовательский запрос на получение всех постов");
+            return ResponseEntity.status(200).body(postsService.getAllPosts());
+        } catch (Exception e){
+            log.error(e.getMessage());
+            return ResponseEntity.status(404).body("Посты не найдены");
         }
     }
 
+    /// Получение постов текущего пользователя
     @GetMapping("/my")
     public ResponseEntity<?> getMyPosts(@AuthenticationPrincipal UserDetails userDetails){
         try{
+            log.info("Пользовательский запрос на получение собственных постов");
             return ResponseEntity.status(200).body(postsService.getPostsByAuthor(userDetails.getUsername()));
         } catch (Exception e){
-            log.error("Ошибка при получении постов текущего пользователя {}: {}", userDetails.getUsername(), e.getMessage());
-            return ResponseEntity.status(500).body("Внутренняя ошибка сервера");
+            log.error(e.getMessage());
+            return ResponseEntity.status(404).body("Ваши посты не найдены");
         }
     }
 
+    /// Получение постов конкретного пользователя
     @GetMapping("/author/{author}")
     public ResponseEntity<?> getPostsByAuthor(@PathVariable String author){
         try{
+            log.info("Пользовательский запрос на получение постов автора: {}", author);
             return ResponseEntity.status(200).body(postsService.getPostsByAuthor(author));
         } catch (Exception e){
-            log.error("Ошибка при получении постов пользователя {}: {}", author, e.getMessage());
-            return ResponseEntity.status(500).body("Внутренняя ошибка сервера");
+            log.error(e.getMessage());
+            return ResponseEntity.status(404).body("Посты автора " + author + " не найдены");
         }
     }
 
+    /// Получение постов подписок
     @GetMapping("/subscriptions")
-    public ResponseEntity<List<PostDTO>> getSubscriptionPosts(@AuthenticationPrincipal UserDetails userDetails){
+    public ResponseEntity<?> getSubscriptionsPosts(@AuthenticationPrincipal UserDetails userDetails){
         try{
-            return ResponseEntity.status(200).body(postsService.getSubscriptionPosts(userDetails.getUsername()));
+            log.info("Пользовательский запрос на получение постов подписок пользователя: {}", userDetails.getUsername());
+            return ResponseEntity.status(200).body(postsService.getSubscriptionsPosts(userDetails.getUsername()));
         } catch (Exception e){
-            log.error("Ошибка при получении постов подписок пользователя {}: {}", userDetails.getUsername(), e.getMessage());
-            return ResponseEntity.status(500).body(Collections.emptyList());
+            log.error(e.getMessage());
+            return ResponseEntity.status(404).body("Посты подписок не найдены");
         }
     }
 
-    @GetMapping("/search")
-    public ResponseEntity<List<PostDTO>> getPostsByTags(@RequestParam List<String> tags) {
+    /// Получение постов по тэгам
+    @GetMapping("/search-by-tags")
+    public ResponseEntity<?> getPostsByTags(@RequestParam List<String> tags){
         try {
-            List<PostDTO> posts = postsService.getPostsByTags(tags);
-            return ResponseEntity.ok(posts);
-        } catch (Exception e) {
-            log.error("Ошибка при поиске постов по тегам: {}", e.getMessage());
-            return ResponseEntity.status(500).body(Collections.emptyList());
+            return ResponseEntity.status(200).body(postsService.getPostsByTags(tags));
+        } catch (Exception e){
+            log.error(e.getMessage());
+            return ResponseEntity.status(404).body("Посты не найдены");
         }
     }
 
+    /// Получение постов по тексту
     @GetMapping("/search-by-text")
-    public ResponseEntity<List<PostDTO>> getPostsByText(@RequestParam String text){
+    public ResponseEntity<?> getPostsByText(@RequestBody String text){
         try{
+            log.info("Пользовательский запрос на получение постов по тексту: {}", text);
             return ResponseEntity.status(200).body(postsService.getPostsByText(text));
         } catch (Exception e){
-            log.error("Ошибка при получении постов по тексту {}: {}", text, e.getMessage());
-            return ResponseEntity.status(500).body(Collections.emptyList());
+            log.error(e.getMessage());
+            return ResponseEntity.status(404).body("Посты не найдены");
         }
     }
 

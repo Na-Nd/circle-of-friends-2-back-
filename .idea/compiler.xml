@@ -9,9 +9,10 @@
         <outputRelativeToContentRoot value="true" />
         <module name="post-user-service" />
         <module name="auth-service" />
-        <module name="account-user-service" />
         <module name="posts-user-service" />
         <module name="registry-service" />
+        <module name="messages-service" />
+        <module name="account-user-service" />
         <module name="notifications-service" />
       </profile>
     </annotationProcessing>
@@ -30,6 +31,7 @@
       <module name="account-service" options="-parameters" />
       <module name="account-user-service" options="-parameters" />
       <module name="auth-service" options="-parameters" />
+      <module name="messages-service" options="-parameters" />
       <module name="notifications-service" options="-parameters" />
       <module name="post-user-service" options="-parameters" />
       <module name="posts-service" options="-parameters" />

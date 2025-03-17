@@ -6,6 +6,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import ru.nand.registryservice.entities.DTO.UserDTO;
 import ru.nand.registryservice.services.UserService;
 import ru.nand.registryservice.entities.DTO.AccountPatchDTO;
 
@@ -22,79 +23,85 @@ public class AccountUserController {
         this.userService = userService;
     }
 
-    @GetMapping("/{username}/followers/count")
-    public ResponseEntity<Integer> getFollowerCount(@PathVariable String username) {
+    /// Получение данных аккаунта конкретного пользователя
+    @GetMapping("/{username}")
+    public ResponseEntity<UserDTO> getFollowerCount(@PathVariable String username) {
         try {
-            log.info("Запрос на получение количества подписчиков пользователя {}", username);
-            return ResponseEntity.ok(userService.getFollowersCount(username));
+            log.info("Запрос от account-user-service на получение данных аккаунта пользователя {}", username);
+            return ResponseEntity.status(200).body(userService.getUserByUsername(username));
         } catch (Exception e) {
-            log.error("Ошибка получения количества подписчиков пользователя {}: {}", username, e.getMessage());
-            return ResponseEntity.status(500).body(null);
+            log.error(e.getMessage());
+            return ResponseEntity.status(404).body(null);
         }
     }
 
+    /// Получение username'ов подписчиков пользователя
     @GetMapping("/{username}/followers")
     public ResponseEntity<List<String>> getFollowers(@PathVariable String username) {
         try {
-            log.info("Запрос на получение подписчиков пользователя {}", username);
+            log.info("Запрос от account-user-service на получение подписчиков пользователя {}", username);
             return ResponseEntity.ok(userService.getFollowers(username));
         } catch (Exception e) {
             log.error("Ошибка получения подписчиков пользователя {}: {}", username, e.getMessage());
-            return ResponseEntity.status(500).body(null);
+            return ResponseEntity.status(404).body(null);
         }
     }
 
+    /// Получение списка username'ов подписок пользователя
     @GetMapping("/{username}/following")
     public ResponseEntity<List<String>> getFollowing(@PathVariable String username) {
         try {
-            log.info("Запрос на получение подписок пользователя {}", username);
+            log.info("Запрос от account-user-service на получение подписок пользователя {}", username);
             return ResponseEntity.ok(userService.getFollowing(username));
         } catch (Exception e) {
             log.error("Ошибка получения подписок пользователя {}: {}", username, e.getMessage());
-            return ResponseEntity.status(500).body(null);
+            return ResponseEntity.status(404).body(null);
         }
     }
 
+    /// Подписка пользователя current на пользователя target (возвращаем почту пользователя target)
     @PostMapping("/{currentUsername}/follow/{targetUsername}")
     public ResponseEntity<String> followUser(@PathVariable String currentUsername, @PathVariable String targetUsername) {
         try {
-            log.info("Запрос на подписку пользователя {} на {}", currentUsername, targetUsername);
-            userService.followUser(currentUsername, targetUsername);
-            return ResponseEntity.ok("Подписка успешно оформлена");
+            log.info("Запрос от account-user-service на подписку пользователя {} на {}", currentUsername, targetUsername);
+            return ResponseEntity.status(200).body(userService.followUser(currentUsername, targetUsername));
         } catch (Exception e) {
             log.error("Ошибка подписки пользователя {} на {}: {}", currentUsername, targetUsername, e.getMessage());
-            return ResponseEntity.status(500).body("Ошибка подписки: " + e.getMessage());
+            return ResponseEntity.status(400).body("Ошибка подписки: " + e.getMessage());
         }
     }
 
-    @DeleteMapping("/{currentUsername}/follow/{targetUsername}")
+    /// Отписка пользователя current от пользователя target
+    @PostMapping("/{currentUsername}/unfollow/{targetUsername}")
     public ResponseEntity<String> unfollowUser(@PathVariable String currentUsername, @PathVariable String targetUsername){
         try{
-            log.info("Запрос на отписку пользователя {} от {}", currentUsername, targetUsername);
+            log.info("Запрос от account-user-service на отписку пользователя {} от {}", currentUsername, targetUsername);
             userService.unfollowUser(currentUsername, targetUsername);
 
             return ResponseEntity.status(200).body("Вы успешно отписались от " + targetUsername);
         } catch (Exception e){
             log.error("Ошибка отписки пользователя {} от {}: {}", currentUsername, targetUsername, e.getMessage());
-            return ResponseEntity.status(500).body("Ошибка отписки: " + e.getMessage());
+            return ResponseEntity.status(400).body("Ошибка отписки: " + e.getMessage());
         }
     }
 
+    /// Получение списка всех username'ов пользователей
     @GetMapping
     public ResponseEntity<List<String>> getAllUsernames() {
         try {
-            log.info("Запрос на получение списка пользователей");
+            log.info("Запрос от account-user-service на получение списка пользователей");
             return ResponseEntity.ok(userService.getAllUsernames());
         } catch (Exception e) {
             log.error("Ошибка получения списка пользователей: {}", e.getMessage());
-            return ResponseEntity.status(500).body(null);
+            return ResponseEntity.status(404).body(null);
         }
     }
 
+    /// Обновление данных аккаунта
     @PatchMapping("/edit")
     public ResponseEntity<String> patchUser(@RequestBody String message) {
         try {
-            log.info("Запрос на обновление данных аккаунта");
+            log.info("Запрос от account-user-service на обновление данных аккаунта");
 
             // Десериализация входящего сообщения
             AccountPatchDTO accountPatchDTO;
@@ -107,25 +114,37 @@ public class AccountUserController {
 
             // Обновление данных пользователя
             String newJwt = userService.updateUser(accountPatchDTO);
-            return ResponseEntity.ok("Данные аккаунта успешно обновлены, новый JWT: " + newJwt);
+            return ResponseEntity.status(200).body("Данные аккаунта успешно обновлены, новый access: " + newJwt);
         } catch (Exception e) {
             log.error("Ошибка обновления данных аккаунта: {}", e.getMessage());
-            return ResponseEntity.status(500).body("Ошибка обновления данных аккаунта: " + e.getMessage());
+            return ResponseEntity.status(400).body("Ошибка обновления данных аккаунта: " + e.getMessage());
         }
     }
 
-
+    /// Удаление пользователя
     @DeleteMapping("/{username}")
     public ResponseEntity<String> deleteUser(@PathVariable String username) {
         try {
-            log.info("Запрос на удаление аккаунта {}", username);
+            log.info("Запрос от account-user-service на удаление аккаунта {}", username);
             userService.deleteUser(username);
             return ResponseEntity.ok("Аккаунт успешно удалён");
         } catch (Exception e) {
             log.error("Ошибка удаления аккаунта {}: {}", username, e.getMessage());
-            return ResponseEntity.status(500).body("Ошибка удаления аккаунта: " + e.getMessage());
+            return ResponseEntity.status(400).body("Ошибка удаления аккаунта: " + e.getMessage());
         }
     }
 
+    /// Проверка на существование пользователя c переданным id
+    /// В случае существования вернет email пользователя
+    @GetMapping("/{userId}/exists")
+    public ResponseEntity<String> userExists(@PathVariable int userId) {
+        try{
+            log.info("Принял запрос от messages-service на существование id: {}", userId);
+            return ResponseEntity.status(200).body(userService.existsById(userId));
+        } catch (Exception e){
+            log.error(e.getMessage());
+            return ResponseEntity.status(404).body(e.getMessage());
+        }
+    }
 
 }

@@ -5,6 +5,8 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Set;
 
 @Data
@@ -15,8 +17,5 @@ public class PostRequest {
 
     private Set<String> tags;
 
-    private String author;
-
-   private MultipartFile image; // Картинка
-
+    private List<MultipartFile> images = new ArrayList<>();
 }

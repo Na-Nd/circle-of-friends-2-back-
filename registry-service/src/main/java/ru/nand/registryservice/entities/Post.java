@@ -1,19 +1,20 @@
 package ru.nand.registryservice.entities;
 
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import jakarta.validation.constraints.Size;
+import lombok.*;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 @Getter
 @Setter
 @AllArgsConstructor
 @NoArgsConstructor
+@Builder
 @Entity
 @Table(name = "posts")
 public class Post {
@@ -52,7 +53,9 @@ public class Post {
     @OneToMany(mappedBy = "post", cascade = CascadeType.ALL, orphanRemoval = true)
     private Set<Comment> comments = new HashSet<>();
 
+    @ElementCollection
+    @CollectionTable(name = "post_files", joinColumns = @JoinColumn(name = "post_id"))
     @Column(name = "filename")
-    private String filename;
+    private List<String> filenames = new ArrayList<>();
 
 }

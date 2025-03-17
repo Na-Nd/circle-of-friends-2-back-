@@ -2,37 +2,35 @@ package ru.nand.notificationsservice.services;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.annotation.KafkaListener;
-import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import ru.nand.notificationsservice.entities.DTO.NotificationDTO;
 
 @Slf4j
 @Service
 public class KafkaNotificationsListener {
-    private final KafkaTemplate<String, String> kafkaTemplate;
     private final MailSenderService mailSenderService;
+    private final ObjectMapper objectMapper;
+    private final NotificationService notificationService;
 
     @Autowired
-    public KafkaNotificationsListener(KafkaTemplate<String, String> kafkaTemplate, MailSenderService mailSenderService) {
-        this.kafkaTemplate = kafkaTemplate;
+    public KafkaNotificationsListener(MailSenderService mailSenderService, ObjectMapper objectMapper, NotificationService notificationService) {
         this.mailSenderService = mailSenderService;
+        this.objectMapper = objectMapper;
+        this.notificationService = notificationService;
     }
 
     @KafkaListener(topics = "user-notifications-topic", groupId = "notifications-group")
     public void handleNotification(String message) throws JsonProcessingException {
-        ObjectMapper objectMapper = new ObjectMapper();
-
+        log.info("В сервис пришло уведомление");
         NotificationDTO notificationDTO = objectMapper.readValue(message, NotificationDTO.class);
 
-        log.info("Отправка уведомления на почту {}", notificationDTO.getUserEmail());
+        log.info("Отправка уведомления на почту пользователю {}", notificationDTO.getUserEmail());
 
         mailSenderService.sendMail(notificationDTO.getUserEmail(), "Уведомление от COF-2", notificationDTO.getMessage());
 
-        // Теперь передаем уведомление в registry-service для сохранения
-        kafkaTemplate.send("notifications-registry-topic", message);
+        notificationService.saveNotification(notificationDTO);
     }
 }

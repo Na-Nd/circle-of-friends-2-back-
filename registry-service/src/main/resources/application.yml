@@ -1,0 +1,44 @@
+spring:
+  application:
+    name: registry-service
+  datasource:
+    url: ${POSTGRES_URL}
+    username: ${POSTGRES_USER}
+    password: ${POSTGRES_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+    hibernate:
+      ddl-auto: update
+
+server:
+  port: 8081
+
+jwt:
+  secret: ${JWT_SECRET}
+  expiration: ${JWT_EXPIRATION}
+  access:
+    jwt:
+      expiration: ${ACCESS_JWT_EXPIRATION}
+  refresh:
+    jwt:
+      expiration: ${REFRESH_JWT_EXPIRATION}
+
+interservice:
+  header:
+    name: ${INTERSERVICE_HEADER_NAME}
+  secret:
+    key: ${INTERSERVICE_SECRET_KEY}
+
+myplug: ${TOKEN_PLUG}
+mysecret: ${MY_SECRET}
+
+accountuserservice:
+  jwt:
+    secret: ${SERVICE_JWT_SECRET}
+
+grpc:
+  server:
+    port: 9090

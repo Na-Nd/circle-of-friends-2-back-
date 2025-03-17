@@ -1,24 +1,25 @@
 package ru.nand.notificationsservice.entities;
 
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.*;
+import org.springframework.data.cassandra.core.mapping.PrimaryKey;
+import org.springframework.data.cassandra.core.mapping.Table;
 
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 @Getter
 @Setter
 @AllArgsConstructor
-@NoArgsConstructor
+@Builder
+@Table("notifications")
 public class Notification {
 
-    private int id;
+    @PrimaryKey
+    private NotificationKey key;
+
+    private String message;
 
     private String ownerUsername;
 
-    private String text;
-
     private LocalDateTime creationDate;
-
 }
