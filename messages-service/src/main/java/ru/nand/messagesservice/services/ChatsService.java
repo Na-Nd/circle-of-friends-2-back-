@@ -49,12 +49,6 @@ public class ChatsService {
         // Проверяем, существуют ли пользователи
         String user1Email = userExists(userId1);
         String user2Email = userExists(userId2);
-        if (!user1Email.isEmpty()) {
-            throw new RuntimeException("Пользователь с ID " + userId1 + " не существует");
-        }
-        if (!user2Email.isEmpty()) {
-            throw new RuntimeException("Пользователь с ID " + userId2 + " не существует");
-        }
 
         // Проверяем, существует ли уже чат между этими пользователями
         UUID existingChatId = findExistingChat(userId1, userId2);

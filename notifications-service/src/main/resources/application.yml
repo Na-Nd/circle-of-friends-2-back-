@@ -21,6 +21,11 @@ spring:
 server:
   port: 8083
 
+logging:
+  level:
+    org.apache.kafka.clients.admin: WARN
+    org.apache.kafka.clients.consumer.ConsumerConfig: WARN
+
 jwt:
   secret: ${JWT_SECRET}
   expiration: ${JWT_EXPIRATION}

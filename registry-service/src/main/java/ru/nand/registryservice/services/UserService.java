@@ -1,5 +1,7 @@
 package ru.nand.registryservice.services;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -21,7 +23,9 @@ import ru.nand.registryservice.utils.JwtUtil;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 @Slf4j
 @Service
@@ -31,6 +35,7 @@ public class UserService implements UserDetailsService {
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
     private final UserSessionService userSessionService;
+    private final ObjectMapper objectMapper;
 
     @Value("${jwt.access.jwt.expiration}")
     private long accessTokenExpiration;
@@ -241,5 +246,40 @@ public class UserService implements UserDetailsService {
         return userRepository.findById(userId).
                 orElseThrow(()-> new RuntimeException("Пользователь не найден"))
                 .getEmail();
+    }
+
+    /// Возвращает JSON ответ из почт пользователей если все пользователи существуют
+    public String findUsers(String requestMessage){
+        Set<Integer> usersIds;
+        try{
+            usersIds = objectMapper.readValue(requestMessage, new TypeReference<Set<Integer>>(){});
+        } catch (Exception e){
+            log.warn("Ошибка при десериализации запроса {}: {}", requestMessage, e.getMessage());
+            throw new RuntimeException("Ошибка при десериализации данных запроса " + e.getMessage());
+        }
+
+        Set<String> usersEmails = new HashSet<>();
+
+        try{
+            for(Integer userId : usersIds){
+                usersEmails.add(
+                        userRepository.findById(userId).orElseThrow(()-> new RuntimeException("Пользователь не найден")).getEmail()
+                );
+            }
+        } catch (RuntimeException e){ // Если хотя бы один из пользователей не найден - бросаем исключение в контроллер
+            log.warn("Ошибка при поиске пользователей: {}", e.getMessage());
+            throw new RuntimeException("Ошибка при поиске пользователей: " + e.getMessage());
+        }
+
+        // Собираем в JSON
+        String responseMessage;
+        try{
+            responseMessage = objectMapper.writeValueAsString(usersEmails);
+        } catch (Exception e){
+            log.warn("Ошибка при сериализации данных овтета: {}", e.getMessage());
+            throw new RuntimeException("Ошибка при сериализации данных ответа: " + e.getMessage());
+        }
+
+        return responseMessage;
     }
 }

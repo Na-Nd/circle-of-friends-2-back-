@@ -19,6 +19,10 @@ spring:
 server:
   port: 8080
 
+logging:
+  level:
+    org.apache.kafka.clients.admin: WARN
+
 service:
   jwt:
     secret: ${SERVICE_JWT_SECRET}

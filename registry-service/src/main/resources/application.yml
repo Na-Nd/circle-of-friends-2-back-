@@ -13,6 +13,10 @@ spring:
     hibernate:
       ddl-auto: update
 
+logging:
+  level:
+    org.apache.kafka.clients.admin: WARN
+
 server:
   port: 8081
 
