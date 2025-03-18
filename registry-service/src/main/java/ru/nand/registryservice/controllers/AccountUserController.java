@@ -147,4 +147,17 @@ public class AccountUserController {
         }
     }
 
+    /// Проверка на существование пользователей с переданным сетом id
+    /// В случае существования всех пользователей вернет их почты
+    @PostMapping("/find-users")
+    public ResponseEntity<String> findUsers(@RequestBody String requestMessage){
+        try{
+            log.info("Запрос от group-chats-service на проверку на существование пользователей");
+            return ResponseEntity.status(200).body(userService.findUsers(requestMessage));
+        } catch (Exception e){
+            log.error(e.getMessage());
+            return ResponseEntity.status(404).body("Пользователи не найдены");
+        }
+    }
+
 }

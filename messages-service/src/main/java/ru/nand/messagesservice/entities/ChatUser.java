@@ -16,7 +16,7 @@ import java.util.UUID;
 @Setter
 @AllArgsConstructor
 @Table("chat_users")
-public class ChatUser {
+public class ChatUser { // Какие пользователи состоят в чате
     @PrimaryKey
     private ChatUserKey key;
 

@@ -17,6 +17,9 @@
         <option value="$PROJECT_DIR$/user-posts-service/pom.xml" />
         <option value="$PROJECT_DIR$/posts-user-service/pom.xml" />
         <option value="$PROJECT_DIR$/messages-service/pom.xml" />
+        <option value="$PROJECT_DIR$/groups-service/pom.xml" />
+        <option value="$PROJECT_DIR$/groups-chats-service/pom.xml" />
+        <option value="$PROJECT_DIR$/group-chats-service/pom.xml" />
       </list>
     </option>
     <option name="ignoredFiles">

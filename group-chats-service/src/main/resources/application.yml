@@ -1,0 +1,47 @@
+spring:
+  application:
+    name: group-chats-service
+  cassandra:
+    keyspace-name: ${CASSANDRA_KEYSPACE_NAME}
+    contact-points: ${CASSANDRA_CONTACT_POINTS}
+    port: ${CASSANDRA_PORT}
+    local-datacenter: ${CASSANDRA_LOCAL_DATACENTER}
+    schema-action: create_if_not_exists
+
+server:
+  port: 8086
+
+logging:
+  level:
+    org.apache.kafka.clients.admin: WARN
+
+jwt:
+  secret: ${JWT_SECRET}
+  expiration: ${JWT_EXPIRATION}
+  access:
+    expiration: ${ACCESS_JWT_EXPIRATION}
+  refresh:
+    expiration: ${REFRESH_JWT_EXPIRATION}
+
+service:
+  jwt:
+    secret: ${SERVICE_JWT_SECRET}
+
+interservice:
+  secret:
+    key: ${INTERSERVICE_SECRET_KEY}
+  header:
+    name: ${INTERSERVICE_HEADER_NAME}
+
+registry:
+  service:
+    url: ${REGISTRY_SERVICE_URL}
+
+myplug: ${TOKEN_PLUG}
+mysecret: ${MY_SECRET}
+
+grpc:
+  client:
+    tokenRefreshRegistryService:
+      address: localhost:9090
+      negotiationType: plaintext

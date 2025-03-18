@@ -241,6 +241,7 @@ public class AccountService {
     }
 
     /// Удаление аккаунта
+    @CacheEvict(value = "userCache", key = "#username")
     public void deleteAccount(String username) throws RuntimeException {
         String url = REGISTRY_SERVICE_URL + "/api/users/" + username;
 

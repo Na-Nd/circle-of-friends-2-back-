@@ -6,6 +6,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
@@ -94,6 +96,7 @@ public class PostsService {
     }
 
     /// Получение поста по id
+    @Cacheable(value = "postCache", key = "#postId", unless = "#result == null")
     public PostDTO getPostById(int postId) {
         String url = REGISTRY_SERVICE_URL + "/api/posts/" + postId;
         HttpHeaders headers = new HttpHeaders();
@@ -136,6 +139,7 @@ public class PostsService {
     }
 
     /// Удаление поста
+    @CacheEvict(value = "postCache", key = "#postId")
     public String deletePostById(int postId, String postOwnerUsername){
         String url = REGISTRY_SERVICE_URL + "/api/posts/" + postId;
         HttpHeaders headers = new HttpHeaders();
@@ -178,6 +182,7 @@ public class PostsService {
     }
 
     /// Редактирование своего поста (PUT)
+    @CacheEvict(value = "postCache", key = "#postId")
     public String updatePost(int postId, PostRequest postRequest, String postOwnerUsername){
         // Если текущий пользователь является автором поста
         PostDTO existingPost = getPostById(postId);
