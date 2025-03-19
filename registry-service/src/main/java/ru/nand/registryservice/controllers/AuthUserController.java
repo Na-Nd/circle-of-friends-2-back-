@@ -5,9 +5,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import ru.nand.registryservice.entities.DTO.LoginDTO;
-import ru.nand.registryservice.entities.DTO.RegisterDTO;
-import ru.nand.registryservice.entities.DTO.TokenResponse;
+import ru.nand.registryservice.entities.DTO.AuthService.LoginDTO;
+import ru.nand.registryservice.entities.DTO.AuthService.RegisterDTO;
+import ru.nand.registryservice.entities.DTO.AuthService.TokenResponse;
 import ru.nand.registryservice.entities.UserSession;
 import ru.nand.registryservice.services.UserService;
 
