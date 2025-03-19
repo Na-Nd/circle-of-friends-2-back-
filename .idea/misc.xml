@@ -20,6 +20,7 @@
         <option value="$PROJECT_DIR$/groups-service/pom.xml" />
         <option value="$PROJECT_DIR$/groups-chats-service/pom.xml" />
         <option value="$PROJECT_DIR$/group-chats-service/pom.xml" />
+        <option value="$PROJECT_DIR$/analytics-service/pom.xml" />
       </list>
     </option>
     <option name="ignoredFiles">

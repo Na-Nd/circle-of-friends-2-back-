@@ -8,7 +8,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import ru.nand.registryservice.entities.DTO.UserDTO;
 import ru.nand.registryservice.services.UserService;
-import ru.nand.registryservice.entities.DTO.AccountPatchDTO;
+import ru.nand.registryservice.entities.DTO.AccountUserService.AccountPatchDTO;
 
 import java.util.List;
 
@@ -157,6 +157,30 @@ public class AccountUserController {
         } catch (Exception e){
             log.error(e.getMessage());
             return ResponseEntity.status(404).body("Пользователи не найдены");
+        }
+    }
+
+    /// Получение списка созданных аккаунтов за последние n часов
+    @GetMapping("/created-accounts/{hoursCount}")
+    public ResponseEntity<String> getCreatedAccounts(@PathVariable int hoursCount){
+        try{
+            log.info("Запрос от analytics-service на получение созданных аккаунтов за последние {} часов", hoursCount);
+            return ResponseEntity.status(200).body(userService.getCreatedAccounts(hoursCount));
+        } catch (Exception e){
+            log.error(e.getMessage());
+            return ResponseEntity.status(404).body("Аккаунты не найдены");
+        }
+    }
+
+    /// Получение N аккаунтов с наибольшим количеством подписчиков (количество упорядочено от большего к меньшему)
+    @GetMapping("/popular-accounts/{accountsCount}")
+    public ResponseEntity<String> getPopularAccounts(@PathVariable int accountsCount){
+        try{
+            log.info("Запрос от analytics-service на получение популярных аккаунтов");
+            return ResponseEntity.status(200).body(userService.getPopularAccounts(accountsCount));
+        } catch (Exception e){
+            log.error(e.getMessage());
+            return ResponseEntity.status(404).body("Аккаунты не найдены");
         }
     }
 

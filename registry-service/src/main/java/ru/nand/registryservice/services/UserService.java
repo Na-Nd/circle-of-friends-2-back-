@@ -15,11 +15,12 @@ import ru.nand.registryservice.entities.DTO.UserDTO;
 import ru.nand.registryservice.entities.ENUMS.ROLE;
 import ru.nand.registryservice.entities.ENUMS.STATUS;
 import ru.nand.registryservice.entities.User;
-import ru.nand.registryservice.entities.DTO.AccountPatchDTO;
-import ru.nand.registryservice.entities.DTO.RegisterDTO;
+import ru.nand.registryservice.entities.DTO.AccountUserService.AccountPatchDTO;
+import ru.nand.registryservice.entities.DTO.AuthService.RegisterDTO;
 import ru.nand.registryservice.entities.UserSession;
 import ru.nand.registryservice.repositories.UserRepository;
 import ru.nand.registryservice.utils.JwtUtil;
+import ru.nand.registryservice.utils.RegistryUtil;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -36,6 +37,7 @@ public class UserService implements UserDetailsService {
     private final JwtUtil jwtUtil;
     private final UserSessionService userSessionService;
     private final ObjectMapper objectMapper;
+    private final RegistryUtil registryUtil;
 
     @Value("${jwt.access.jwt.expiration}")
     private long accessTokenExpiration;
@@ -281,5 +283,46 @@ public class UserService implements UserDetailsService {
         }
 
         return responseMessage;
+    }
+
+    /// Получение списка созданных аккаунтов за последние n часов
+    public String getCreatedAccounts(int hoursCount) {
+        try{
+            // Текущее время и время, которое было n часов назад
+            LocalDateTime now = LocalDateTime.now();
+            LocalDateTime startTime = now.minusHours(hoursCount);
+
+            // Получаем список пользователей, зарегистрированных за последние n часов
+            List<User> users = userRepository.findByRegistrationDateBetween(startTime, now);
+
+            return registryUtil.enrichUserDTOs(users);
+        } catch (Exception e){
+            log.warn("Ошибка при получении списка созданных аккаунтов за последние {} часов: {}", hoursCount, e.getMessage());
+            throw new RuntimeException("Ошибка при получении списка созданных аккаунтов за последние " + hoursCount + "часов: " + e.getMessage());
+        }
+    }
+
+    /// Получение N аккаунтов с наибольшим количеством подписчиков (количество упорядочено от большего к меньшему)
+    /// если пользователей меньше N то вернет всех доступных
+    public String getPopularAccounts(int accountsCount) {
+        try {
+            List<User> users = userRepository.findAll();
+
+            // Сортируем пользователей по количеству подписчиков в порядке убывания
+            List<User> sortedUsers = users.stream()
+                    .sorted((u1, u2) -> Integer.compare(u2.getSubscribers().size(), u1.getSubscribers().size()))
+                    .toList();
+
+            // Берем первые accountsCount пользователей
+            List<User> topUsers = sortedUsers.stream()
+                    .limit(accountsCount)
+                    .toList();
+
+            // Преобразуем список User в список UserDTO
+            return registryUtil.enrichUserDTOs(topUsers);
+        } catch (Exception e) {
+            log.warn("Ошибка при получении популярных аккаунтов: {}", e.getMessage());
+            throw new RuntimeException("Ошибка при получении популярных аккаунтов: " + e.getMessage());
+        }
     }
 }

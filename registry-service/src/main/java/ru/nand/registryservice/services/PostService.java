@@ -6,7 +6,10 @@ import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import ru.nand.registryservice.entities.DTO.*;
+import ru.nand.registryservice.entities.DTO.AnalyticsService.CreatedPostsDTO;
+import ru.nand.registryservice.entities.DTO.PostsUserService.PostCreateDTO;
+import ru.nand.registryservice.entities.DTO.PostsUserService.PostDTO;
+import ru.nand.registryservice.entities.DTO.PostsUserService.PostUpdateDTO;
 import ru.nand.registryservice.entities.Post;
 import ru.nand.registryservice.entities.User;
 import ru.nand.registryservice.repositories.PostRepository;
@@ -58,7 +61,6 @@ public class PostService {
         for (User subscriber : postAuthor.getSubscribers()) {
             registryUtil.sendNotification(
                     subscriber.getEmail(),
-                    postAuthor.getUsername(),
                     "Посмотрите новый пост от " + postAuthor.getUsername()
             );
         }
@@ -240,5 +242,42 @@ public class PostService {
                         null,
                         null
                 )).collect(Collectors.toList());
+    }
+
+    /// Получение созданных постов за последние N часов
+    public String getCreatedPosts(int hoursCount) {
+        try {
+            // Получаем текущее время и время, которое было N часов назад
+            LocalDateTime now = LocalDateTime.now();
+            LocalDateTime startTime = now.minusHours(hoursCount);
+
+            // Получаем список постов, созданных за последние N часов
+            List<Post> posts = postRepository.findByDateOfPublicationBetween(startTime, now);
+
+            List<PostDTO> postDTOs = posts.stream()
+                    .map(post -> PostDTO.builder()
+                            .postId(post.getId())
+                            .ownerUsername(post.getAuthor().getUsername())
+                            .text(post.getText())
+                            .dateOfPublication(post.getDateOfPublication())
+                            .tags(post.getTags())
+                            .likes(post.getLikes().size())
+                            .comments(post.getComments().size())
+                            .imagesUrls(post.getFilenames())
+                            .images(null) // Для аналитики нет смысла обращаться к микросервису постов и брать от туда Base64 изображений или их байты
+                            .imagesBase64(null) // Для аналитики нет смысла обращаться к микросервису постов и брать от туда Base64 изображений или их байты
+                            .build())
+                    .collect(Collectors.toList());
+
+            CreatedPostsDTO createdPostsDTO = CreatedPostsDTO.builder()
+                    .postsCount(postDTOs.size())
+                    .createdPosts(postDTOs)
+                    .build();
+
+            return objectMapper.writeValueAsString(createdPostsDTO);
+        } catch (Exception e) {
+            log.warn("Ошибка при получении постов: {}", e.getMessage());
+            throw new RuntimeException("Ошибка при получении постов: "+ e.getMessage());
+        }
     }
 }

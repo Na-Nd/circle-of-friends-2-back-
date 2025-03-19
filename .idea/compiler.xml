@@ -11,6 +11,7 @@
         <module name="auth-service" />
         <module name="posts-user-service" />
         <module name="registry-service" />
+        <module name="analytics-service" />
         <module name="messages-service" />
         <module name="group-chats-service" />
         <module name="account-user-service" />
@@ -31,6 +32,7 @@
     <option name="ADDITIONAL_OPTIONS_OVERRIDE">
       <module name="account-service" options="-parameters" />
       <module name="account-user-service" options="-parameters" />
+      <module name="analytics-service" options="-parameters" />
       <module name="auth-service" options="-parameters" />
       <module name="group-chats-service" options="-parameters" />
       <module name="messages-service" options="-parameters" />

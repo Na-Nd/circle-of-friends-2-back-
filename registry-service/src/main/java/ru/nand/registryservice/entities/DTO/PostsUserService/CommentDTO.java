@@ -1,4 +1,4 @@
-package ru.nand.registryservice.entities.DTO;
+package ru.nand.registryservice.entities.DTO.PostsUserService;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;

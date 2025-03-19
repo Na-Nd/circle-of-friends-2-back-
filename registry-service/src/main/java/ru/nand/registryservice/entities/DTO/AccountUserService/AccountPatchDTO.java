@@ -1,4 +1,4 @@
-package ru.nand.registryservice.entities.DTO;
+package ru.nand.registryservice.entities.DTO.AccountUserService;
 
 import jakarta.validation.constraints.Email;
 import lombok.AllArgsConstructor;

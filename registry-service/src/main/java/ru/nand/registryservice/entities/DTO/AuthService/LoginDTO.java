@@ -1,4 +1,4 @@
-package ru.nand.registryservice.entities.DTO;
+package ru.nand.registryservice.entities.DTO.AuthService;
 
 import jakarta.validation.constraints.NotBlank;
 import lombok.AllArgsConstructor;

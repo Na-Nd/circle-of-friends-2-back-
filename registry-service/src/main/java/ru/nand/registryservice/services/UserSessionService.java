@@ -4,11 +4,14 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import ru.nand.registryservice.entities.ENUMS.ROLE;
 import ru.nand.registryservice.entities.ENUMS.STATUS;
 import ru.nand.registryservice.entities.User;
 import ru.nand.registryservice.entities.UserSession;
+import ru.nand.registryservice.repositories.UserRepository;
 import ru.nand.registryservice.repositories.UserSessionRepository;
 import ru.nand.registryservice.utils.JwtUtil;
+import ru.nand.registryservice.utils.RegistryUtil;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -19,6 +22,8 @@ import java.util.List;
 public class UserSessionService {
     private final UserSessionRepository userSessionRepository;
     private final JwtUtil jwtUtil;
+    private final UserRepository userRepository;
+    private final RegistryUtil registryUtil;
 
     @Value("${jwt.access.jwt.expiration}")
     private long accessTokenExpiration;
@@ -27,9 +32,11 @@ public class UserSessionService {
     private long refreshTokenExpiration;
 
     @Autowired
-    public UserSessionService(UserSessionRepository userSessionRepository, JwtUtil jwtUtil) {
+    public UserSessionService(UserSessionRepository userSessionRepository, JwtUtil jwtUtil, UserRepository userRepository, RegistryUtil registryUtil) {
         this.userSessionRepository = userSessionRepository;
         this.jwtUtil = jwtUtil;
+        this.userRepository = userRepository;
+        this.registryUtil = registryUtil;
     }
 
     /// Создание новой сессия для пользователя
@@ -138,8 +145,19 @@ public class UserSessionService {
         List<UserSession> sessions = userSessionRepository.findByUserAndStatus(user, STATUS.ACTIVE);
         sessions.forEach(session -> session.setStatus(STATUS.BLOCKED));
 
-        log.warn("Все сессии пользователя {} заблокированы.", user.getUsername());
+        log.warn("Все активные сессии пользователя {} заблокированы.", user.getUsername());
         userSessionRepository.saveAll(sessions);
+
+        try{
+            // Уведомление администраторам
+            List<User> admins = userRepository.findByRole(ROLE.ROLE_ADMIN);
+            log.debug("Получены администраторы для оповещения: {}", admins);
+            for (User admin : admins) {
+                registryUtil.sendNotification(admin.getEmail(), "Обнаружена подозрительная активность пользователя " + user.getUsername() +", его сессии были заблокированы");
+            }
+        } catch (Exception e){
+            log.warn("Администраторы не найдены");
+        }
     }
 
     /// Наличие заблокированных сессий

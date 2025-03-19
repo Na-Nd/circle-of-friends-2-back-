@@ -4,7 +4,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import ru.nand.registryservice.entities.DTO.CommentDTO;
+import ru.nand.registryservice.entities.DTO.PostsUserService.CommentDTO;
 import ru.nand.registryservice.services.CommentService;
 
 import java.util.List;

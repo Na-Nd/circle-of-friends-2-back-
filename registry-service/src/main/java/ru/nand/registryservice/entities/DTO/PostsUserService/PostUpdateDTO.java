@@ -1,5 +1,7 @@
-package ru.nand.registryservice.entities.DTO;
+package ru.nand.registryservice.entities.DTO.PostsUserService;
+
 import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
@@ -7,9 +9,10 @@ import java.util.List;
 import java.util.Set;
 
 @Data
+@Builder
 @AllArgsConstructor
 @NoArgsConstructor
-public class PostCreateDTO {
+public class PostUpdateDTO {
     private String text;
     private Set<String> tags;
     private List<String> imagesUrls; // Список файлов (картинок)

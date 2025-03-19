@@ -1,4 +1,4 @@
-package ru.nand.registryservice.entities.DTO;
+package ru.nand.registryservice.entities.DTO.AuthService;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;

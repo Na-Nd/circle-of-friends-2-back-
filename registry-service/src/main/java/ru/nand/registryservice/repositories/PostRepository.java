@@ -7,6 +7,7 @@ import org.springframework.stereotype.Repository;
 import ru.nand.registryservice.entities.Post;
 import ru.nand.registryservice.entities.User;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
 
@@ -22,4 +23,6 @@ public interface PostRepository extends JpaRepository<Post, Integer> {
     List<Post> findByTextStartingWith(@Param("text") String text);
 
     List<Post> findByAuthorIn(Set<User> authors);
+
+    List<Post> findByDateOfPublicationBetween(LocalDateTime start, LocalDateTime end);
 }

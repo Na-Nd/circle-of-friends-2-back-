@@ -1,20 +1,13 @@
 package ru.nand.registryservice.controllers;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import ru.nand.registryservice.entities.DTO.CommentCreateDTO;
-import ru.nand.registryservice.entities.DTO.CommentDTO;
-import ru.nand.registryservice.entities.DTO.PostCreateDTO;
-import ru.nand.registryservice.entities.DTO.PostDTO;
-import ru.nand.registryservice.services.CommentService;
+import ru.nand.registryservice.entities.DTO.PostsUserService.PostDTO;
 import ru.nand.registryservice.services.PostService;
 
-import java.util.Collections;
 import java.util.List;
-import java.util.Objects;
 
 @Slf4j
 @RestController
@@ -134,6 +127,18 @@ public class PostsUserController {
         } catch (Exception e){
             log.error(e.getMessage());
             return ResponseEntity.status(404).body(null);
+        }
+    }
+
+    /// Получение постов за последние N часов
+    @GetMapping("/created-posts/{hoursCount}")
+    public ResponseEntity<String> getCreatedPosts(@PathVariable int hoursCount){
+        try{
+            log.info("Запрос от analytics-service на получение созданных постов за последние {} часов", hoursCount);
+            return ResponseEntity.status(200).body(postService.getCreatedPosts(hoursCount));
+        } catch (Exception e){
+            log.error(e.getMessage());
+            return ResponseEntity.status(404).body("Посты не найдены");
         }
     }
 }
