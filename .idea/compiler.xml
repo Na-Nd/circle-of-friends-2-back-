@@ -15,6 +15,7 @@
         <module name="messages-service" />
         <module name="group-chats-service" />
         <module name="account-user-service" />
+        <module name="admin-service" />
         <module name="notifications-service" />
       </profile>
     </annotationProcessing>
@@ -32,6 +33,7 @@
     <option name="ADDITIONAL_OPTIONS_OVERRIDE">
       <module name="account-service" options="-parameters" />
       <module name="account-user-service" options="-parameters" />
+      <module name="admin-service" options="-parameters" />
       <module name="analytics-service" options="-parameters" />
       <module name="auth-service" options="-parameters" />
       <module name="group-chats-service" options="-parameters" />

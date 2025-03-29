@@ -184,4 +184,16 @@ public class AccountUserController {
         }
     }
 
+    /// Получение списка аккаунтов с заблокированными сессиями (типа подозрительная активность)
+    @GetMapping("/blocked-accounts")
+    public ResponseEntity<String> getBlockedAccounts(){
+        try{
+            log.info("Запрос от admin-service на получение аккаунтов с заблокированными сессиями");
+            return ResponseEntity.status(200).body(userService.getBlockedAccounts());
+        } catch (Exception e){
+            log.error(e.getMessage());
+            return ResponseEntity.status(404).body("Ошибка при получении аккаунтов");
+        }
+    }
+
 }

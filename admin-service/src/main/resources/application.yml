@@ -1,0 +1,37 @@
+spring:
+  application:
+    name: admin-service
+
+server:
+  port: 8088
+
+jwt:
+  secret: ${JWT_SECRET}
+  expiration: ${JWT_EXPIRATION}
+  access:
+    expiration: ${ACCESS_JWT_EXPIRATION}
+  refresh:
+    expiration: ${REFRESH_JWT_EXPIRATION}
+
+service:
+  jwt:
+    secret: ${SERVICE_JWT_SECRET}
+
+interservice:
+  secret:
+    key: ${INTERSERVICE_SECRET_KEY}
+  header:
+    name: ${INTERSERVICE_HEADER_NAME}
+
+registry:
+  service:
+    url: ${REGISTRY_SERVICE_URL}
+
+myplug: ${TOKEN_PLUG}
+mysecret: ${MY_SECRET}
+
+grpc:
+  client:
+    tokenRefreshRegistryService:
+      address: localhost:9090
+      negotiationType: plaintext

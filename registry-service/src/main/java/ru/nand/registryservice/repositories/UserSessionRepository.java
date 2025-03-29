@@ -21,4 +21,6 @@ public interface UserSessionRepository extends JpaRepository<UserSession, Long> 
     Optional<UserSession> findByAccessToken(String accessToken);
 
     List<UserSession> findByStatusAndLastActivityTimeBefore(STATUS status, LocalDateTime threshold);
+
+    List<UserSession> findByStatus(STATUS status);
 }

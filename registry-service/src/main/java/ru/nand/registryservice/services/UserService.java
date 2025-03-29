@@ -1,5 +1,6 @@
 package ru.nand.registryservice.services;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.transaction.Transactional;
@@ -19,6 +20,7 @@ import ru.nand.registryservice.entities.DTO.AccountUserService.AccountPatchDTO;
 import ru.nand.registryservice.entities.DTO.AuthService.RegisterDTO;
 import ru.nand.registryservice.entities.UserSession;
 import ru.nand.registryservice.repositories.UserRepository;
+import ru.nand.registryservice.repositories.UserSessionRepository;
 import ru.nand.registryservice.utils.JwtUtil;
 import ru.nand.registryservice.utils.RegistryUtil;
 
@@ -27,6 +29,7 @@ import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -38,6 +41,7 @@ public class UserService implements UserDetailsService {
     private final UserSessionService userSessionService;
     private final ObjectMapper objectMapper;
     private final RegistryUtil registryUtil;
+    private final UserSessionRepository userSessionRepository;
 
     @Value("${jwt.access.jwt.expiration}")
     private long accessTokenExpiration;
@@ -323,6 +327,37 @@ public class UserService implements UserDetailsService {
         } catch (Exception e) {
             log.warn("Ошибка при получении популярных аккаунтов: {}", e.getMessage());
             throw new RuntimeException("Ошибка при получении популярных аккаунтов: " + e.getMessage());
+        }
+    }
+
+    /// Получение списка аккаунтов с заблокированными сессиями (типа подозрительная активность)
+    public String getBlockedAccounts() {
+        try{
+            // Все заблокированные сессии
+            List<UserSession> blockedSessions = userSessionRepository.findByStatus(STATUS.BLOCKED);
+
+            // Берем пользователей
+            List<User> blockedUsers = blockedSessions.stream()
+                    .map(UserSession::getUser)
+                    .distinct()
+                    .toList();
+
+            // Преобразуем в ДТО
+            List<UserDTO> response = blockedUsers.stream()
+                    .map(user -> UserDTO.builder()
+                            .id(user.getId())
+                            .username(user.getUsername())
+                            .email(user.getEmail())
+                            .subscribersCount(user.getSubscribers().size())
+                            .subscriptionsCount(user.getSubscriptions().size())
+                            .postsCount(user.getPosts().size())
+                            .build()).toList();
+
+            // Соберем в JSON
+            return objectMapper.writeValueAsString(response);
+        } catch (JsonProcessingException e){
+            log.warn("Ошибка при сериализации данных: {}", e.getMessage());
+            throw new RuntimeException("Ошибка при сериализации данных");
         }
     }
 }

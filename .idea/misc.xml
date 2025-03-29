@@ -21,6 +21,7 @@
         <option value="$PROJECT_DIR$/groups-chats-service/pom.xml" />
         <option value="$PROJECT_DIR$/group-chats-service/pom.xml" />
         <option value="$PROJECT_DIR$/analytics-service/pom.xml" />
+        <option value="$PROJECT_DIR$/admin-service/pom.xml" />
       </list>
     </option>
     <option name="ignoredFiles">
@@ -35,7 +36,7 @@
       </set>
     </option>
   </component>
-  <component name="ProjectRootManager" version="2" project-jdk-name="corretto-21" project-jdk-type="JavaSDK">
+  <component name="ProjectRootManager" version="2" languageLevel="JDK_24" project-jdk-name="openjdk-24" project-jdk-type="JavaSDK">
     <output url="file://$PROJECT_DIR$/out" />
   </component>
 </project>
