@@ -360,4 +360,21 @@ public class UserService implements UserDetailsService {
             throw new RuntimeException("Ошибка при сериализации данных");
         }
     }
+
+    /// Блокировка аккаунта пользователя
+    public void banUser(int userId){
+        try{
+            // Находим и блокируем пользователя
+            User user = userRepository.findById(userId).orElseThrow(() -> new RuntimeException("Пользователь не найден"));
+
+            user.setIsBlocked(true);
+            userRepository.save(user);
+
+            // Отправляем уведомление о блокировке
+            registryUtil.sendNotification(user.getEmail(), user.getUsername() + ", ваш аккаунт заблокирован");
+        } catch (Exception e){
+            log.warn("Ошибка при блокировке аккаунта пользователя {}: {}", userId, e.getMessage());
+            throw new RuntimeException("Ошибка при блокировке аккаунта пользователя: " + e.getMessage());
+        }
+    }
 }

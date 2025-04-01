@@ -2,8 +2,6 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/admin-service/admin-service.iml" filepath="$PROJECT_DIR$/admin-service/admin-service.iml" />
-      <module fileurl="file://$PROJECT_DIR$/analytics-service/analytics-service.iml" filepath="$PROJECT_DIR$/analytics-service/analytics-service.iml" />
       <module fileurl="file://$PROJECT_DIR$/circle-of-friends2.iml" filepath="$PROJECT_DIR$/circle-of-friends2.iml" />
     </modules>
   </component>

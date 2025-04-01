@@ -5,9 +5,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 import ru.nand.adminservice.entities.DTO.UserDTO;
 import ru.nand.adminservice.services.AdminService;
 
@@ -52,6 +50,18 @@ public class AdminController {
         } catch (Exception e){
             log.error(e.getMessage());
             return ResponseEntity.status(404).body(null);
+        }
+    }
+
+    /// Блокировка аккаунта пользователя
+    @PostMapping("/ban/{userId}")
+    public ResponseEntity<String> blockUser(@PathVariable int userId){
+        try{
+            log.warn("Запрос администратора блокировку аккаунта пользователя {}", userId);
+            return ResponseEntity.status(200).body(adminService.blockUser(userId));
+        } catch (Exception e){
+            log.error(e.getMessage());
+            return ResponseEntity.status(404).body("Пользователь не найден");
         }
     }
 }
