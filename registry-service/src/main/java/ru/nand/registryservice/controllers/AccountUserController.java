@@ -196,4 +196,17 @@ public class AccountUserController {
         }
     }
 
+    /// Блокировка аккаунта пользователя
+    @PostMapping("/ban/{userId}")
+    public ResponseEntity<String> banUser(@PathVariable int userId){
+        try{
+            log.info("Запрос от admin-service на блокировку аккаунта пользователя");
+            userService.banUser(userId);
+            return ResponseEntity.status(200).body("Пользователь " + userId + " заблокирован");
+        } catch (Exception e){
+            log.error(e.getMessage());
+            return ResponseEntity.status(404).body("Пользователь не найден");
+        }
+    }
+
 }

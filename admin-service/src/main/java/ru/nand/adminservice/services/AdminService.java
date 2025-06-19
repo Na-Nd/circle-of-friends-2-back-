@@ -58,4 +58,32 @@ public class AdminService {
             throw new RuntimeException("Ошибка при получении списка аккаунтов с заблокированными сессиями: " + e.getMessage());
         }
     }
+
+    /// Блокировка аккаунта пользователя
+    public String blockUser(int userId){
+        String url = REGISTRY_SERVICE_URL + "/api/users/ban/" + userId;
+        HttpHeaders headers = new HttpHeaders();
+        headers.set(HEADER_NAME, "Bearer " + jwtUtil.generateInterServiceJwt());
+
+        HttpEntity<Void> requestEntity = new HttpEntity<>(headers);
+
+        try{
+            ResponseEntity<String> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.POST,
+                    requestEntity,
+                    String.class
+            );
+
+            if(!response.getStatusCode().is2xxSuccessful()){
+                log.warn("Неуспешный ответ от registry-service при блокировке аккаунта пользователя {}", userId);
+                throw new RuntimeException("Неуспешный ответ от registry-service при получении списка аккаунтов с заблокированными сессиями");
+            }
+
+            return response.getBody();
+        } catch (Exception e){
+            log.warn("Ошибка при блокировке аккаунта пользователя {}: {}", userId, e.getMessage());
+            throw new RuntimeException("Ошибка при блокировке аккаунта пользователя: " + e.getMessage());
+        }
+    }
 }
