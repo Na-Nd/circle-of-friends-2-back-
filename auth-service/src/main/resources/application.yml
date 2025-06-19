@@ -47,3 +47,15 @@ registry:
 
 myplug: ${TOKEN_PLUG}
 mysecret: ${MY_SECRET}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+    tags:
+      application: ${spring.application.name}

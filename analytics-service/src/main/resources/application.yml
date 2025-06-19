@@ -35,3 +35,15 @@ grpc:
     tokenRefreshRegistryService:
       address: localhost:9090
       negotiationType: plaintext
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+    tags:
+      application: ${spring.application.name}
